@@ -1,0 +1,67 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+/* -------------------------------------------------
+   NOTE: the connection URL is NOT put here any more.
+   It is injected through prisma.config.ts (see step 2).
+   ------------------------------------------------- */
+
+// ----- Enums -------------------------------------------------
+enum OrderStatusEnum {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+// ----- Models -------------------------------------------------
+model Order {
+  /** Unique identifier – auto‑generated UUID */
+  id          String   @id @default(uuid())
+  /** Reference to the customer who placed the order */
+  customerId  String
+  /** Total amount in the smallest currency unit (e.g. cents) */
+  totalCents  Int
+  /** ISO‑8601 timestamp when the order was created */
+  createdAt   DateTime @default(now())
+  /** Optional timestamp when the order status was last updated */
+  updatedAt   DateTime?
+
+  /** One‑to‑many: an order has many items */
+  items       OrderItem[]
+  /** One‑to‑many: an order has many status entries */
+  orderStatus OrderStatus[]
+}
+
+model OrderItem {
+  /** Unique identifier */
+  id          String   @id @default(uuid())
+  /** Foreign key to Order */
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderId     String
+  /** Product identifier */
+  productId   String
+  /** Quantity of the product */
+  quantity    Int
+}
+
+/**
+ * OrderStatus – a single status entry for an order.
+ */
+model OrderStatus {
+  /** Unique identifier */
+  id        String   @id @default(uuid())
+  /** Foreign key to Order */
+  order     Order    @relation(fields: [orderId], references: [id])
+  orderId   String
+  /** Current status – one of the enum values */
+  status    OrderStatusEnum
+  /** When the status changed */
+  updatedAt DateTime?
+
+  /** Back‑reference to the Order */
+  order     Order    @relation(fields: [orderId], references: [id])
+}

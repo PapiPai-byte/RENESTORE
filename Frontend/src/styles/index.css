@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    /* More saturated dark teal gradient */
+    background: linear-gradient(135deg, #031716 0%, #073B40 40%, #0A7075 100%);
+    background-attachment: fixed;
+    color: #fff;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+  }
+
+  #root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Ambient glow orbs — fixed behind all content */
+  .glass-orbs {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .glass-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.48;
+    animation: glassFloat 20s ease-in-out infinite;
+  }
+
+  @keyframes glassFloat {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-30px) scale(1.08); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glass-orb { animation: none; }
+  }
+
+  /* Shimmer skeleton — translateX sweep */
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  @keyframes slideUpIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+  }
+
+  @keyframes spinner {
+    to { transform: rotate(360deg); }
+  }
+
+  .animate-shimmer {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .animate-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  .animate-slide-up {
+    animation: slideUpIn 0.45s ease-out forwards;
+  }
+
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glass-orb { animation: none; }
+    .animate-shimmer::after, .animate-slide-up, .animate-pulse-glow { animation: none; }
+  }
+}
+
+@layer components {
+  /* ── Glass panels ── */
+  .glass {
+    background: rgba(12, 150, 156, 0.10);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.30);
+    border-radius: 1rem;
+  }
+
+  .glass-strong {
+    background: rgba(12, 150, 156, 0.16);
+    backdrop-filter: blur(28px) saturate(160%);
+    -webkit-backdrop-filter: blur(28px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.30);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    border-radius: 1rem;
+  }
+
+  .glass-subtle {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem;
+  }
+
+  /* ── Glass input ── */
+  .glass-input {
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    border-radius: 0.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .glass-input::placeholder { color: rgba(255, 255, 255, 0.55); }
+  .glass-input:focus {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(12, 150, 156, 0.6);
+    box-shadow: 0 0 0 3px rgba(12, 150, 156, 0.25);
+  }
+
+  /* Fallback for browsers without backdrop-filter */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass   { background: rgba(10, 40, 45, 0.88); }
+    .glass-strong { background: rgba(10, 40, 45, 0.94); }
+    .glass-subtle { background: rgba(10, 40, 45, 0.72); }
+    .glass-input { background: rgba(10, 40, 45, 0.80); }
+  }
+
+  .focus-visible-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent;
+  }
+}
+
+@layer utilities {
+  .text-shadow-sm { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "renestore-backend",
+  "version": "1.0.0",
+  "description": "Backend API for ReneStore e-commerce platform",
+  "main": "src/server.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "lint": "eslint . --ext .ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx src/db/seed.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "0.45.4",
+    "express": "^4.22.3",
+    "groq-sdk": "^1.6.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.5.0",
+    "@types/bcryptjs": "^2.4.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.25",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/node": "^22.5.5",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.5.0",
+    "eslint-plugin-import": "^2.29.1",
+    "jiti": "^1.21.0",
+    "prisma": "^7.10.1",
+    "tsx": "^4.7.1",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.72.0"
+  },
+  "author": "ReneStore Team",
+  "license": "MIT"
+}
