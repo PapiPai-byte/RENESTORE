@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -7,27 +7,70 @@ import { Loader } from '@/components/common/Loader';
 import { ErrorMessage } from '@/components/common/ErrorMessage';
 import analyticsService from '@/services/analyticsService';
 import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import {
+  BarChart, Bar, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, XAxis, YAxis, CartesianGrid
+} from 'recharts';
 
-const chartColors = ['#0C969C', '#6BA3BE', '#E3A008', '#1F9D6B', '#274D60'];
+const chartColors = ['#0C969C', '#6BA3BE', '#E3A008', '#10B981', '#274D60'];
 const defaultBudget = 100000;
+const defaultPurchaseBudget = 250000;
 const defaultMin: Record<string, number> = { 'Facebook': 5000, 'Google Ads': 5000, 'Email': 2000, 'TikTok': 3000, 'Instagram': 3000 };
-const defaultMax: Record<string, number> = { 'Facebook': 50000, 'Google Ads': 50000, 'Email': 20000, 'TikTok': 30000, 'Instagram': 25000 };
+const defaultMax: Record<string, number> = { 'Facebook': 40000, 'Google Ads': 40000, 'Email': 20000, 'TikTok': 30000, 'Instagram': 25000 };
 const channels = ['Facebook', 'Google Ads', 'Email', 'TikTok', 'Instagram'] as const;
 
 export default function PrescriptiveTab() {
   const [totalBudget, setTotalBudget] = useState(defaultBudget);
+  const [purchaseBudget, setPurchaseBudget] = useState(defaultPurchaseBudget);
   const [minPerChannel, setMinPerChannel] = useState(defaultMin);
   const [maxPerChannel, setMaxPerChannel] = useState(defaultMax);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Run initial optimization on mount
+  useEffect(() => {
+    handleOptimize();
+  }, []);
+
   const handleOptimize = async () => {
     setError(null);
+
+    // Validation checks
+    const sumMin = Object.values(minPerChannel).reduce((a, b) => a + Number(b || 0), 0);
+    const sumMax = Object.values(maxPerChannel).reduce((a, b) => a + Number(b || 0), 0);
+
+    for (const ch of channels) {
+      if (!Number.isFinite(Number(minPerChannel[ch])) || !Number.isFinite(Number(maxPerChannel[ch])) ||
+          Number(minPerChannel[ch]) < 0 || Number(maxPerChannel[ch]) < 0) {
+        setError(`Channel "${ch}": minimum and maximum spends must be finite, non-negative amounts.`);
+        return;
+      }
+      if (Number(minPerChannel[ch]) > Number(maxPerChannel[ch])) {
+        setError(`Channel "${ch}": Minimum spend (₱${minPerChannel[ch]}) cannot exceed Maximum spend (₱${maxPerChannel[ch]}).`);
+        return;
+      }
+    }
+    if (!Number.isFinite(totalBudget) || totalBudget <= 0 || !Number.isFinite(purchaseBudget) || purchaseBudget < 0) {
+      setError('Marketing budget must be positive and purchase budget must be non-negative.');
+      return;
+    }
+    if (sumMin > totalBudget) {
+      setError(`Infeasible: Sum of minimum channel allocations (₱${sumMin.toLocaleString()}) exceeds total budget of ₱${totalBudget.toLocaleString()}.`);
+      return;
+    }
+    if (sumMax < totalBudget) {
+      setError(`Infeasible: Sum of maximum channel allocations (₱${sumMax.toLocaleString()}) is less than total budget. Increase channel maximums.`);
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await analyticsService.getPrescriptive({ totalBudget, minPerChannel, maxPerChannel });
+      const data = await analyticsService.getPrescriptive({
+        totalBudget,
+        minPerChannel,
+        maxPerChannel,
+        purchaseBudget,
+      });
       setResult(data);
     } catch (e: any) {
       setError(e.message ?? 'Optimization failed');
@@ -36,81 +79,133 @@ export default function PrescriptiveTab() {
     }
   };
 
-  const allocationData = result?.allocation?.map((a: any) => ({
+  const allocations = result?.allocations || [];
+
+  // Before vs After comparison dataset
+  const comparisonData = allocations.map((a: any) => ({
+    channel: a.channel,
+    historicalSpend: a.historicalSpend,
+    recommendedSpend: a.budget,
+  }));
+
+  const pieData = allocations.map((a: any) => ({
     name: a.channel,
-    value: a.recommendedSpend,
-  })) || [];
+    value: a.budget,
+  }));
 
   const commonTooltipStyle = {
-    backgroundColor: 'rgba(3,23,22,0.92)',
+    backgroundColor: 'rgba(3,23,22,0.95)',
     backdropFilter: 'blur(12px)',
-    border: '1px solid rgba(255,255,255,0.2)',
+    border: '1px solid rgba(255,255,255,0.25)',
     borderRadius: '12px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+  };
+
+  const axisColor = 'rgba(255,255,255,0.75)';
+  const gridStroke = 'rgba(255,255,255,0.12)';
+
+  const exportInventoryToCsv = () => {
+    if (!result?.inventoryPlan?.items) return;
+    const items = result.inventoryPlan.items;
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [
+        'Product Name,Category,Supplier,Current Stock,Reorder Level,Reorder Point (ROP),EOQ,Recommended Order Qty,Unit Cost,Total Cost,Priority',
+        ...items.map((i: any) =>
+          `"${i.productName}","${i.category}","${i.supplier}",${i.currentStock},${i.reorderLevel},${i.reorderPoint},${i.economicOrderQty},${i.recommendedOrderQty},${i.unitCost},${i.totalCost},"${i.priority}"`
+        ),
+      ].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', 'prescriptive_inventory_plan.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const exportAllocationsToCsv = () => {
+    const rows = allocations.map((item: any) => [
+      item.channel,
+      item.budget,
+      item.sharePct,
+      item.expectedRevenue,
+      item.roi,
+      item.historicalSpend,
+    ]);
+    const csv = [
+      'Channel,Recommended Budget,Budget Share (%),Estimated Revenue,Estimated ROI (%),Historical Average Spend',
+      ...rows.map((row: any[]) => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ].join('\n');
+    const link = document.createElement('a');
+    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`;
+    link.download = 'prescriptive_budget_allocation.csv';
+    link.click();
   };
 
   return (
     <div className="space-y-6">
-      {/* Budget Controls */}
+      {/* 1. Marketing Budget Optimization Controls */}
       <Card>
-        <h3 className="text-lg font-bold text-white mb-4">Budget Allocation</h3>
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-white/70 mb-2">
-            Total Budget:{' '}
-            <span className="text-bright font-bold">{formatCurrency(totalBudget)}</span>
-          </label>
-          <div className="relative">
-            <input
-              type="range"
-              min={10000}
-              max={200000}
-              step={5000}
-              value={totalBudget}
-              onChange={(e) => setTotalBudget(Number(e.target.value))}
-              className="w-full h-2 rounded-full appearance-none cursor-pointer accent-bright"
-              style={{
-                background: `linear-gradient(to right, #0C969C 0%, #0C969C ${((totalBudget - 10000) / 190000) * 100}%, rgba(255,255,255,0.1) ${((totalBudget - 10000) / 190000) * 100}%)`,
-              }}
-            />
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-bright shadow-[0_0_15px_rgba(12,150,156,0.6)] border-2 border-abyss pointer-events-none transition-all"
-              style={{ left: `calc(${((totalBudget - 10000) / 190000) * 100}% - 10px)` }}
-            />
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              Prescriptive Marketing Budget Optimization
+              <span className="bg-bright/20 text-bright text-xs px-2.5 py-0.5 rounded-full border border-bright/30">
+                Marginal ROI / LP Solver
+              </span>
+            </h3>
+            <p className="text-xs text-white/60">
+              Uses campaign-derived ROI estimates and the selected constraints to compare budget allocations.
+            </p>
           </div>
-          <input
-            type="number"
-            value={totalBudget}
-            onChange={(e) => setTotalBudget(Number(e.target.value))}
-            className="mt-2 w-full max-w-xs glass-input text-white px-3 py-2 rounded-xl"
-            min={10000}
-            max={200000}
-            step={5000}
-          />
+          <span className="text-xs text-white/50 font-mono">Linear programming (campaign ROI)</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {channels.map(channel => (
-            <div key={channel} className="glass-subtle rounded-xl p-4 space-y-3">
-              <p className="font-semibold text-white text-sm">{channel}</p>
-              <div className="grid grid-cols-2 gap-2">
+        {/* Total Budget Slider + Input */}
+        <div className="mb-6 glass-subtle p-4 rounded-xl">
+          <div className="flex justify-between items-center mb-2">
+            <label className="text-xs font-semibold text-white/80">Monthly Marketing Budget</label>
+            <span className="text-xl font-bold text-bright tabular-nums">{formatCurrency(totalBudget)}</span>
+          </div>
+          <input
+            type="range"
+            min={20000}
+            max={300000}
+            step={5000}
+            value={totalBudget}
+            onChange={(e) => setTotalBudget(Number(e.target.value))}
+            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-bright bg-white/10"
+          />
+          <div className="flex justify-between text-[11px] text-white/40 mt-1">
+            <span>₱20,000 (Min)</span>
+            <span>Current budget</span>
+            <span>₱300,000 (Max)</span>
+          </div>
+        </div>
+
+        {/* Per-Channel Min/Max Constraints */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+          {channels.map((channel) => (
+            <div key={channel} className="glass-subtle rounded-xl p-3 space-y-2 border border-white/10">
+              <span className="font-semibold text-white text-xs block">{channel}</span>
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label className="text-[11px] text-white/40 uppercase tracking-wider mb-1 block">Min</label>
+                  <label className="text-[10px] text-white/40 uppercase block mb-1">Min (₱)</label>
                   <input
                     type="number"
                     value={minPerChannel[channel]}
                     onChange={(e) => setMinPerChannel(prev => ({ ...prev, [channel]: Number(e.target.value) }))}
-                    className="w-full glass-input text-white px-2 py-1.5 rounded-lg text-sm"
-                    aria-label={`${channel} minimum budget`}
+                    className="w-full glass-input text-white px-2 py-1 rounded text-xs tabular-nums"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] text-white/40 uppercase tracking-wider mb-1 block">Max</label>
+                  <label className="text-[10px] text-white/40 uppercase block mb-1">Max (₱)</label>
                   <input
                     type="number"
                     value={maxPerChannel[channel]}
                     onChange={(e) => setMaxPerChannel(prev => ({ ...prev, [channel]: Number(e.target.value) }))}
-                    className="w-full glass-input text-white px-2 py-1.5 rounded-lg text-sm"
-                    aria-label={`${channel} maximum budget`}
+                    className="w-full glass-input text-white px-2 py-1 rounded text-xs tabular-nums"
                   />
                 </div>
               </div>
@@ -118,151 +213,264 @@ export default function PrescriptiveTab() {
           ))}
         </div>
 
-        <Button variant="primary" className="mt-6 w-full" onClick={handleOptimize} disabled={loading}>
-          {loading ? <Loader /> : 'Optimize Budget'}
+        <Button variant="primary" className="w-full py-2.5 text-sm font-bold shadow-glow" onClick={handleOptimize} disabled={loading}>
+          {loading ? <Loader /> : 'Optimize Budget & Generate Prescriptive Plan'}
         </Button>
+
         {error && <ErrorMessage message={error} className="mt-4" />}
       </Card>
 
       {result && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Donut Chart */}
+          {/* 2. Before vs After Comparison & Share Distribution */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Before vs After Bar Chart */}
             <Card>
-              <h3 className="text-lg font-bold text-white mb-1">Recommended Allocation</h3>
-              <p className="text-sm text-white/65 mb-4">Spend distribution across channels</p>
+              <h3 className="text-base font-bold text-white mb-1">Before vs. After Allocation Comparison</h3>
+              <p className="text-xs text-white/60 mb-3">Historical spend mix vs. prescribed optimal allocation</p>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={comparisonData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
+                  <XAxis dataKey="channel" stroke={axisColor} tick={{ fill: axisColor, fontSize: 11 }} tickLine={false} axisLine={false} />
+                  <YAxis stroke={axisColor} tick={{ fill: axisColor, fontSize: 11 }} tickFormatter={(v) => formatCompactCurrency(v)} width={64} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    contentStyle={commonTooltipStyle}
+                    formatter={(v: number) => formatCurrency(v)}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: 8 }} formatter={(v) => <span className="text-white/80 text-xs">{v}</span>} />
+                  <Bar dataKey="historicalSpend" name="Historical Average" fill="#6BA3BE" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  <Bar dataKey="recommendedSpend" name="Prescribed Optimal" fill="#0C969C" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            {/* Prescribed Budget Share Donut */}
+            <Card>
+              <h3 className="text-base font-bold text-white mb-1">Prescribed Spend Distribution</h3>
+              <p className="text-xs text-white/60 mb-3">Share of capital allocated per channel</p>
               <div className="flex items-center justify-center">
-                <ResponsiveContainer width="100%" height={280}>
+                <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
                     <Pie
-                      data={allocationData}
+                      data={pieData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={65}
-                      outerRadius={105}
-                      paddingAngle={4}
+                      innerRadius={60}
+                      outerRadius={95}
+                      paddingAngle={3}
                       dataKey="value"
-                      stroke="rgba(3,23,22,0.5)"
-                      strokeWidth={2}
                     >
-                      {allocationData.map((_entry: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={chartColors[i % chartColors.length]} />
                       ))}
                     </Pie>
-                    {/* Center label */}
-                    <text
-                      x="50%"
-                      y="50%"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      className="fill-white font-bold"
-                      style={{ fontSize: '16px', fill: '#fff' }}
-                    >
-                      {formatCompactCurrency(result.totalBudget || totalBudget)}
-                    </text>
-                    <text
-                      x="50%"
-                      y="calc(50% + 18px)"
-                      textAnchor="middle"
-                      style={{ fontSize: '11px', fill: 'rgba(255,255,255,0.5)' }}
-                    >
-                      Total Budget
-                    </text>
-                    <Tooltip contentStyle={commonTooltipStyle} formatter={(value: number) => formatCurrency(value)} />
-                    <Legend
-                      wrapperStyle={{ paddingTop: '16px' }}
-                      formatter={(value: string) => <span className="text-white/70 text-xs">{value}</span>}
-                      iconType="circle"
-                      iconSize={8}
-                    />
+                    <Tooltip contentStyle={commonTooltipStyle} formatter={(v: number) => formatCurrency(v)} />
+                    <Legend wrapperStyle={{ paddingTop: 8 }} formatter={(v) => <span className="text-white/80 text-xs">{v}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </Card>
+          </div>
 
-            {/* Results Table */}
-            <Card>
-              <h3 className="text-lg font-bold text-white mb-4">Allocation Results</h3>
-              <div className="overflow-x-auto -mx-2">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-white/10 backdrop-blur border-b border-white/10">
-                      {['Channel', 'Budget', 'Expected Rev.', 'ROI'].map(h => (
-                        <th key={h} className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-white/70 whitespace-nowrap">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {result.allocation.map((a: any) => (
-                      <tr key={a.channel} className="hover:bg-white/10 transition-colors">
-                        <td className="px-3 py-3 font-medium text-white whitespace-nowrap">{a.channel}</td>
-                        <td className="px-3 py-3 text-white/65 tabular-nums whitespace-nowrap">{formatCurrency(a.recommendedSpend)}</td>
-                        <td className="px-3 py-3 text-white/65 tabular-nums">{formatCurrency(a.expectedRevenue)}</td>
-                        <td className="px-3 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            a.expectedRoi >= 300 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : a.expectedRoi >= 200 ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
-                            : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                          }`}>
-                            {a.expectedRoi}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* 3. Action Recommendations List & Uplift Summary */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Written Action List */}
+            <Card className="lg:col-span-2">
+              <h3 className="text-base font-bold text-white mb-1">Prescribed Action Plan</h3>
+              <p className="text-xs text-white/60 mb-4">Concrete tactical reallocations based on elasticity and ROI</p>
+              <div className="space-y-3">
+                {result.actionList?.map((action: any, idx: number) => {
+                  const icon = action.type === 'increase' ? '↑' : action.type === 'decrease' ? '↓' : '→';
+                  const badgeClass =
+                    action.type === 'increase'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                      : action.type === 'decrease'
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      : 'bg-white/10 text-white/70 border-white/15';
+
+                  return (
+                    <div key={idx} className="glass-subtle p-3.5 rounded-xl border border-white/10 flex items-start gap-3">
+                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-bold text-xs flex-shrink-0 border ${badgeClass}`}>
+                        {icon}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-xs font-bold text-white">{action.actionText}</p>
+                        <p className="text-[11px] text-white/65 mt-0.5">{action.rationale}</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="mt-4 pt-4 border-t border-white/10 flex justify-between font-bold text-white">
-                <span className="text-white/70 text-sm">Total Expected Revenue</span>
-                <span className="text-bright text-lg font-bold">{formatCurrency(result.totalExpectedRevenue)}</span>
+            </Card>
+
+            {/* Baseline Uplift & Key Metrics */}
+            <Card>
+              <h3 className="text-base font-bold text-white mb-1">Expected Financial Impact</h3>
+              <p className="text-xs text-white/60 mb-4">Optimized plan vs alternative baselines</p>
+              <div className="space-y-3">
+                <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 glass-subtle">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold">Total Expected Revenue</p>
+                  <p className="text-2xl font-bold text-emerald-300 tabular-nums">{formatCurrency(result.totalExpectedRevenue)}</p>
+                  <p className="text-xs text-white/70 mt-1">
+                    Overall Expected ROI: <strong className="text-emerald-300">{result.overallROI}%</strong>
+                  </p>
+                </div>
+
+                {result.baselines?.map((bl: any, i: number) => (
+                  <div key={i} className="p-3 rounded-xl glass-subtle border border-white/10 text-xs">
+                    <div className="flex justify-between text-white/70">
+                      <span>{bl.name}:</span>
+                      <span className="font-semibold text-white">{formatCurrency(bl.expectedRevenue)}</span>
+                    </div>
+                    <div className="flex justify-between mt-1 text-[11px]">
+                      <span className="text-white/50">Prescribed Plan Uplift:</span>
+                      <span className={bl.upliftPct >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+                        {bl.upliftPct >= 0 ? '+' : ''}{bl.upliftPct}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </Card>
           </div>
 
-          {/* Stock Recommendations */}
+          {/* 4. Results Allocation Table */}
           <Card>
-            <h3 className="text-lg font-bold text-white mb-4">Stock Recommendations</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {result.stockRecommendations.map((rec: any, idx: number) => {
-                const isIncrease = rec.action.includes('Increase');
-                const isDecrease = rec.action.includes('Reduce');
-                const accentColor = isIncrease ? 'border-emerald-400/60' : isDecrease ? 'border-red-400/60' : 'border-amber-400/60';
-                const bgColor = isIncrease ? 'bg-emerald-500/5' : isDecrease ? 'bg-red-500/5' : 'bg-amber-500/5';
-                const badgeType: any = isIncrease ? 'success' : isDecrease ? 'danger' : 'accent';
-                return (
-                  <div key={idx} className={`p-4 rounded-xl border-l-4 ${accentColor} ${bgColor} glass-subtle`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                        isIncrease ? 'bg-emerald-500/20 text-emerald-400'
-                        : isDecrease ? 'bg-red-500/20 text-red-400'
-                        : 'bg-amber-500/20 text-amber-400'
-                      }`}>
-                        {isIncrease ? (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
-                        ) : isDecrease ? (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <h3 className="text-base font-bold text-white mb-1">Optimized Allocation Details</h3>
+                <p className="text-xs text-white/60">Channel level spend, share %, estimated returns, and bound status</p>
+              </div>
+              <button onClick={exportAllocationsToCsv} className="glass px-3 py-1.5 rounded-lg text-xs font-medium text-white/80 hover:text-white border border-white/15">
+                Export CSV
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+                    <th className="py-2.5 px-3">Channel</th>
+                    <th className="py-2.5 px-3 text-right">Prescribed Budget</th>
+                    <th className="py-2.5 px-3 text-right">Budget Share</th>
+                    <th className="py-2.5 px-3 text-right">Expected Revenue</th>
+                    <th className="py-2.5 px-3 text-right">Expected ROI</th>
+                    <th className="py-2.5 px-3 text-right">ROAS</th>
+                    <th className="py-2.5 px-3 text-center">Constraint Bound</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {allocations.map((a: any) => (
+                    <tr key={a.channel} className="hover:bg-white/5 transition-colors">
+                      <td className="py-2.5 px-3 font-semibold text-white">{a.channel}</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-bright tabular-nums">{formatCurrency(a.budget)}</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-white/80 tabular-nums">{a.sharePct}%</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-white font-semibold tabular-nums">{formatCurrency(a.expectedRevenue)}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-emerald-300 tabular-nums">{a.roi}%</td>
+                      <td className="py-2.5 px-3 text-right font-mono text-white/70 tabular-nums">{a.roas}x</td>
+                      <td className="py-2.5 px-3 text-center">
+                        {a.boundHit ? (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            a.boundHit === 'MAX' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-white/60'
+                          }`}>
+                            {a.boundHit} Limit
+                          </span>
                         ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" /></svg>
+                          <span className="text-emerald-400 text-[10px]">Optimal Interior</span>
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-white mb-1">{rec.category}</p>
-                        <Badge variant={badgeType}>{rec.action}</Badge>
-                        <p className="text-sm text-white/65 mt-2">{rec.reason}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </Card>
 
-          {/* Explanation */}
-          <div className="glass border-l-4 border-bright rounded-xl p-6">
-            <p className="text-white/80">{result.explanation}</p>
-          </div>
+          {/* 5. Inventory Reorder Plan (ROP & EOQ) within Purchase Budget */}
+          {result.inventoryPlan && (
+            <Card>
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-white flex items-center gap-2">
+                    Prescriptive Inventory Purchasing Plan
+                    <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                      ROP & EOQ Model
+                    </span>
+                  </h3>
+                  <p className="text-xs text-white/60">
+                    Allocates inventory purchase budget to highest-priority items based on Economic Order Quantity (EOQ) and Reorder Points (ROP)
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="glass px-3 py-1.5 rounded-lg text-xs text-white/80 border border-white/15">
+                    Budget: <strong className="text-bright">{formatCurrency(result.inventoryPlan.purchaseBudget)}</strong> |
+                    Committed: <strong className="text-emerald-300">{formatCurrency(result.inventoryPlan.totalCommittedCost)}</strong>
+                  </div>
+                  <button
+                    onClick={exportInventoryToCsv}
+                    className="glass px-3 py-1.5 rounded-lg text-xs font-medium text-white/80 hover:text-white border border-white/15 flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Export Plan CSV
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Product Name</th>
+                      <th className="py-2.5 px-3">Category</th>
+                      <th className="py-2.5 px-3">Preferred Supplier</th>
+                      <th className="py-2.5 px-3 text-right">Current Stock</th>
+                      <th className="py-2.5 px-3 text-right">Reorder Point</th>
+                      <th className="py-2.5 px-3 text-right">EOQ</th>
+                      <th className="py-2.5 px-3 text-right">Order Qty</th>
+                      <th className="py-2.5 px-3 text-right">Est. Cost</th>
+                      <th className="py-2.5 px-3 text-center">Priority</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {result.inventoryPlan.items.slice(0, 15).map((item: any) => {
+                      const prioClass =
+                        item.priority === 'Immediate'
+                          ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                          : item.priority === 'Upcoming'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+
+                      return (
+                        <tr key={item.productId} className="hover:bg-white/5 transition-colors">
+                          <td className="py-2.5 px-3 font-medium text-white">{item.productName}</td>
+                          <td className="py-2.5 px-3 text-white/70">{item.category}</td>
+                          <td className="py-2.5 px-3 text-white/70">
+                            <span className="truncate block max-w-[140px]" title={item.supplier}>{item.supplier}</span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-white tabular-nums">{item.currentStock}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-white/60 tabular-nums">{item.reorderPoint}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-white/70 tabular-nums">{item.economicOrderQty}</td>
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-bright tabular-nums">
+                            {item.recommendedOrderQty > 0 ? `${item.recommendedOrderQty} units` : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-white tabular-nums">
+                            {item.totalCost > 0 ? formatCurrency(item.totalCost) : '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${prioClass}`}>
+                              {item.priority}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>

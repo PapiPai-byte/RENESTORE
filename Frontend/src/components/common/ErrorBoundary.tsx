@@ -1,20 +1,21 @@
-import React, { Component, ComponentType, ReactNode } from 'react';
+import { Component, type ReactNode } from 'react';
 
 type ErrorBoundaryProps = {
   fallback?: ReactNode;
+  children?: ReactNode;
 };
 
 type ErrorBoundaryState = {
   hasError: boolean;
 };
 
-class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true };
   }
 
@@ -25,9 +26,3 @@ class ErrorBoundaryInner extends Component<ErrorBoundaryProps, ErrorBoundaryStat
     return this.props.children;
   }
 }
-
-export const ErrorBoundary: ComponentType<ErrorBoundaryProps> = (props) => {
-  return <ErrorBoundaryInner {...props}>{props.children}</ErrorBoundaryInner>;
-};
-
-ErrorBoundary.displayName = 'ErrorBoundary';

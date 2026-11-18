@@ -28,22 +28,36 @@ const iconMap: Record<string, JSX.Element> = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-12 0v1zm-3 3a1 1 0 11-2 0 1 1 0 012 0z" />
     </svg>
   ),
+  'Total Profit': (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+    </svg>
+  ),
+  'Stockout Items': (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+    </svg>
+  ),
 };
 
 const iconColor: Record<string, string> = {
   'Total Revenue': 'text-sky',
+  'Total Profit': 'text-emerald-300',
   'Total Orders': 'text-bright',
   'Avg Order Value': 'text-amber-400',
   'Profit Margin': 'text-emerald-400',
   'Total Customers': 'text-sky',
+  'Stockout Items': 'text-amber-400',
 };
 
 const accentGradient: Record<string, string> = {
   'Total Revenue': 'linear-gradient(90deg, #6BA3BE, #0C969C)',
+  'Total Profit': 'linear-gradient(90deg, #10B981, #059669)',
   'Total Orders': 'linear-gradient(90deg, #0C969C, #0A7075)',
   'Avg Order Value': 'linear-gradient(90deg, #E3A008, #0C969C)',
   'Profit Margin': 'linear-gradient(90deg, #1F9D6B, #0C969C)',
   'Total Customers': 'linear-gradient(90deg, #0C969C, #6BA3BE)',
+  'Stockout Items': 'linear-gradient(90deg, #F59E0B, #EF4444)',
 };
 
 export const KpiCard = ({

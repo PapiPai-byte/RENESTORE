@@ -1,5 +1,6 @@
 import { pgTable, serial, text, integer, doublePrecision, timestamp, pgEnum, boolean } from 'drizzle-orm/pg-core';
 import type { InferInsertModel } from 'drizzle-orm';
+import { relations } from 'drizzle-orm';
 
 export const roleEnum = pgEnum('role', ['admin', 'user']);
 export const segmentEnum = pgEnum('segment', ['Regular', 'Premium', 'Business']);
@@ -31,10 +32,15 @@ export const customers = pgTable('customers', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }).unique(),
   name: text('name').notNull(),
-  email: text('email').notNull().unique(),
+  email: text('email').unique(),
   city: text('city').notNull(),
   signupDate: timestamp('signup_date').notNull().defaultNow(),
   segment: segmentEnum('segment').notNull().default('Regular'),
+});
+
+export const suppliers = pgTable('suppliers', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull().unique(),
 });
 
 export const products = pgTable('products', {
@@ -42,9 +48,11 @@ export const products = pgTable('products', {
   name: text('name').notNull(),
   category: categoryEnum('category').notNull(),
   brand: text('brand').notNull(),
-  price: doublePrecision('price').notNull(),
-  cost: doublePrecision('cost').notNull(),
+  price: doublePrecision('price').notNull(),       // selling_price
+  cost: doublePrecision('cost').notNull(),          // cost_price
   stock: integer('stock').notNull().default(0),
+  reorderLevel: integer('reorder_level').notNull().default(5),  // R3: when stock falls below this, flag stockout risk
+  supplierId: integer('supplier_id').references(() => suppliers.id, { onDelete: 'set null' }),
   description: text('description'),
   imageUrl: text('image_url'),
 });
@@ -55,6 +63,8 @@ export const orders = pgTable('orders', {
   campaignId: integer('campaign_id'),
   orderDate: timestamp('order_date').notNull().defaultNow(),
   totalAmount: doublePrecision('total_amount').notNull(),
+  paymentMethod: paymentMethodEnum('payment_method').notNull().default('COD'),  // R3: moved here for simpler analytics
+  shippingCost: doublePrecision('shipping_cost').notNull().default(0),          // R3: per-order shipping cost
   status: orderStatusEnum('status').notNull().default('pending'),
 });
 
@@ -77,14 +87,41 @@ export const transactions = pgTable('transactions', {
 
 export const marketingCampaigns = pgTable('marketing_campaigns', {
   id: serial('id').primaryKey(),
-  name: text('name').notNull(),
+  name: text('name'),
   channel: campaignChannelEnum('channel').notNull(),
   startDate: timestamp('start_date').notNull(),
   endDate: timestamp('end_date').notNull(),
-  budget: doublePrecision('budget').notNull(),
-  spend: doublePrecision('spend').notNull().default(0),
+  budget: doublePrecision('budget').notNull(),            // planned budget
+  spend: doublePrecision('spend').notNull().default(0),   // budget_spent (actual)
+  impressions: integer('impressions').notNull().default(0),
   clicks: integer('clicks').notNull().default(0),
   conversions: integer('conversions').notNull().default(0),
+  ordersGenerated: integer('orders_generated').notNull().default(0),
+  revenueGenerated: doublePrecision('revenue_generated').notNull().default(0),
+});
+
+export const marketingPerformance = pgTable('marketing_performance', {
+  id: serial('id').primaryKey(),
+  channel: campaignChannelEnum('channel').notNull(),
+  date: timestamp('date').notNull(),
+  spend: doublePrecision('spend').notNull(),
+  revenue: doublePrecision('revenue').notNull(),
+  impressions: integer('impressions').notNull().default(0),
+  clicks: integer('clicks').notNull().default(0),
+  conversions: integer('conversions').notNull().default(0),
+  orders: integer('orders').notNull().default(0),
+});
+
+// ── Inventory Purchases (Supplier) table ─────────────────────────────────────
+// R3: 5th required data variable — tracks supplier purchase orders for inventory
+export const inventoryPurchases = pgTable('inventory_purchases', {
+  id: serial('id').primaryKey(),
+  supplier: text('supplier').notNull(),                          // supplier name
+  productId: integer('product_id').references(() => products.id, { onDelete: 'cascade' }).notNull(),
+  quantity: integer('quantity').notNull(),
+  unitCost: doublePrecision('unit_cost').notNull(),
+  purchaseDate: timestamp('purchase_date').notNull(),
+  leadTimeDays: integer('lead_time_days').notNull().default(7),  // days from order to delivery
 });
 
 // ── Chat / FAQ tables ────────────────────────────────────────────────────────
@@ -112,14 +149,45 @@ export const chatLogs = pgTable('chat_logs', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+export const suppliersRelations = relations(suppliers, ({ many }) => ({
+  products: many(products),
+}));
+
+export const productsRelations = relations(products, ({ one, many }) => ({
+  supplier: one(suppliers, { fields: [products.supplierId], references: [suppliers.id] }),
+  orderItems: many(orderItems),
+  inventoryPurchases: many(inventoryPurchases),
+}));
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  orders: many(orders),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  customer: one(customers, { fields: [orders.customerId], references: [customers.id] }),
+  items: many(orderItems),
+  transactions: many(transactions),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+  product: one(products, { fields: [orderItems.productId], references: [products.id] }),
+}));
+
+export const inventoryPurchasesRelations = relations(inventoryPurchases, ({ one }) => ({
+  product: one(products, { fields: [inventoryPurchases.productId], references: [products.id] }),
+}));
+
 // Type exports
 export type InsertUser = InferInsertModel<typeof users>;
 export type InsertRefreshToken = InferInsertModel<typeof refreshTokens>;
 export type InsertCustomer = InferInsertModel<typeof customers>;
 export type InsertProduct = InferInsertModel<typeof products>;
+export type InsertSupplier = InferInsertModel<typeof suppliers>;
 export type InsertOrder = InferInsertModel<typeof orders>;
 export type InsertOrderItem = InferInsertModel<typeof orderItems>;
 export type InsertTransaction = InferInsertModel<typeof transactions>;
 export type InsertCampaign = InferInsertModel<typeof marketingCampaigns>;
+export type InsertInventoryPurchase = InferInsertModel<typeof inventoryPurchases>;
 export type InsertFaq = InferInsertModel<typeof faqs>;
 export type InsertChatLog = InferInsertModel<typeof chatLogs>;

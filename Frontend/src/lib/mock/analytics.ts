@@ -77,20 +77,29 @@ export const mockAnalytics = {
     ],
   },
   prescriptive: {
-    method: 'Greedy Marginal ROI Optimization',
-    allocation: [
-      { channel: 'Email', recommendedSpend: 10000, expectedRevenue: 55000, expectedRoi: 450 },
-      { channel: 'Google Ads', recommendedSpend: 18000, expectedRevenue: 72000, expectedRoi: 300 },
-      { channel: 'Facebook', recommendedSpend: 15000, expectedRevenue: 52500, expectedRoi: 250 },
-      { channel: 'Instagram', recommendedSpend: 5000, expectedRevenue: 15000, expectedRoi: 200 },
-      { channel: 'TikTok', recommendedSpend: 2000, expectedRevenue: 4600, expectedRoi: 130 },
+    totalBudget: 100000,
+    totalAllocated: 100000,
+    totalExpectedRevenue: 237000,
+    overallROI: 137,
+    overallROAS: 2.37,
+    allocations: [
+      { channel: 'Email', budget: 10000, sharePct: 10, expectedRevenue: 55000, roi: 450, roas: 5.5, marginalRoas: 4.2, boundHit: 'MAX', r2: 0.82 },
+      { channel: 'Google Ads', budget: 25000, sharePct: 25, expectedRevenue: 87500, roi: 250, roas: 3.5, marginalRoas: 2.8, boundHit: null, r2: 0.91 },
+      { channel: 'Facebook', budget: 20000, sharePct: 20, expectedRevenue: 58000, roi: 190, roas: 2.9, marginalRoas: 2.4, boundHit: null, r2: 0.87 },
+      { channel: 'Instagram', budget: 15000, sharePct: 15, expectedRevenue: 39000, roi: 160, roas: 2.6, marginalRoas: 2.1, boundHit: null, r2: 0.79 },
+      { channel: 'TikTok', budget: 30000, sharePct: 30, expectedRevenue: 48000, roi: 60, roas: 1.6, marginalRoas: 1.3, boundHit: null, r2: 0.75 },
     ],
-    totalExpectedRevenue: 199100,
-    stockRecommendations: [
-      { category: 'Laptops', action: 'Increase stock by 20%', reason: 'Forecasted demand up 15% next quarter' },
-      { category: 'Tools', action: 'Maintain current levels', reason: 'Stable demand pattern observed' },
-      { category: 'Accessories', action: 'Reduce by 10%', reason: 'Oversupply detected in Q4' },
+    baselines: [
+      { name: 'Equal Split (respecting MIN/MAX)', expectedRevenue: 195000, upliftPct: 21.5 },
+      { name: 'Historical Spend Mix', expectedRevenue: 210000, upliftPct: 12.9 },
     ],
-    explanation: 'Based on marginal ROI analysis, Email channel shows highest returns. Recommend allocating 40% of budget to Email and Google Ads, with conservative spend on TikTok.',
+    insights: [
+      'Email delivers the highest ROI at 450.0% — consider prioritising this channel.',
+      'TikTok has the lowest ROI (60.0%). Review creative/targeting or reduce spend.',
+      'Email hit its MAX budget cap (₱10,000). Consider raising the MAX if budget allows.',
+    ],
+    generatedAt: new Date().toISOString(),
+    dataRange: { from: '2024-07-01', to: '2025-08-24', recordsUsed: 300 },
+    explanation: 'Data-driven marginal-return optimization using 300 historical records (2024-07-01 – 2025-08-24). Total expected revenue: PHP 237,000. Overall ROI: 137.0%.',
   },
 };

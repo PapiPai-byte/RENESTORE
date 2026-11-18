@@ -1,7 +1,11 @@
 -- Migration: 0001_chat_tables.sql
 -- Adds faqs and chat_logs tables for the AI chat feature.
 
-CREATE TYPE "public"."faq_status" AS ENUM('active', 'archived');--> statement-breakpoint
+DO $$ BEGIN
+	CREATE TYPE "public"."faq_status" AS ENUM('active', 'archived');
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
 
 CREATE TABLE IF NOT EXISTS "faqs" (
 	"id" serial PRIMARY KEY NOT NULL,

@@ -1,132 +1,301 @@
 // @ts-nocheck
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Card } from '@/components/ui/Card';
+import { Loader } from '@/components/common/Loader';
+import analyticsService from '@/services/analyticsService';
+import { formatCurrency, formatCompactCurrency } from '@/lib/utils';
 
-const steps = [
-  {
-    id: 1,
-    phase: 'Descriptive',
-    description: 'Understand what happened through trend analysis and visualization',
-    icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-    glow: 'shadow-[0_0_20px_rgba(12,150,156,0.5)]',
-    gradient: 'from-bright to-primary',
-  },
-  {
-    id: 2,
-    phase: 'Predictive',
-    description: 'Forecast future trends using regression and time series models',
-    icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
-    glow: 'shadow-[0_0_20px_rgba(107,163,190,0.4)]',
-    gradient: 'from-sky to-primary',
-  },
-  {
-    id: 3,
-    phase: 'Prescriptive',
-    description: 'Determine optimal decisions through optimization algorithms',
-    icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z',
-    glow: 'shadow-[0_0_20px_rgba(39,77,96,0.5)]',
-    gradient: 'from-steel to-deep',
-  },
-  {
-    id: 4,
-    phase: 'Decision',
-    description: 'Implement actions based on insights and monitor outcomes',
-    icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
-    glow: 'shadow-lg',
-    gradient: 'from-deep to-abyss',
-    border: 'border border-white/20',
-  },
-];
+export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: string) => void }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalBudget, setTotalBudget] = useState(100000);
+  const [purchaseBudget, setPurchaseBudget] = useState(250000);
 
-export default function ProcessFlowTab() {
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      analyticsService.getProcessFlow(totalBudget, purchaseBudget)
+        .then((d) => {
+          if (!active) return;
+          setData(d);
+          setError(null);
+          setLoading(false);
+        })
+        .catch((e) => {
+          if (!active) return;
+          setError(e.message || 'Unable to load process-flow analytics.');
+          setLoading(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [totalBudget, purchaseBudget]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="glass rounded-2xl p-6 animate-shimmer min-h-[300px]" />
+      </div>
+    );
+  }
+  if (!data) return <Card><p className="text-sm text-red-200">{error || 'Unable to load process-flow analytics.'}</p></Card>;
+
+  const { descriptive, predictive, prescriptive, decision } = data;
+
+  const handleJump = (tab: string) => {
+    if (onTabChange) {
+      onTabChange(tab);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Horizontal Stepper - Desktop */}
-      <div className="hidden md:block">
-        <div className="glass rounded-2xl p-8 shadow-glass">
-          <h3 className="text-lg font-bold text-white mb-8 text-center">Analytics Decision Pipeline</h3>
-          <div className="relative">
-            {/* Animated connector lines */}
-            <div className="absolute top-8 left-[12.5%] right-[12.5%] h-0.5 opacity-30">
-              <div className="h-full w-full bg-gradient-to-r from-bright via-sky to-steel" />
-              <div className="h-full w-full bg-gradient-to-r from-bright via-sky to-steel animate-pulse opacity-50" style={{ animationDuration: '3s' }} />
+      {/* Title & Pipeline Header */}
+      <Card>
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+              Business Analytics Process Flow
+              <span className="bg-bright/20 text-bright text-xs px-2.5 py-0.5 rounded-full border border-bright/30">
+                Requirement R6: Step-Wise Data Pipeline
+              </span>
+            </h3>
+            <p className="text-xs text-white/60 mt-1">
+            Shows how database-derived descriptive results feed predictive estimates and prescriptive scenarios.
+            </p>
+          </div>
+          <span className="text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/30 font-medium">
+            Live Database Pipeline
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          <label className="text-xs text-white/70">
+            Marketing scenario budget
+            <input
+              type="number"
+              min={18000}
+              max={155000}
+              step={5000}
+              value={totalBudget}
+              onChange={(event) => setTotalBudget(Number(event.target.value))}
+              className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white"
+            />
+          </label>
+          <label className="text-xs text-white/70">
+            Inventory purchase budget
+            <input
+              type="number"
+              min={0}
+              step={5000}
+              value={purchaseBudget}
+              onChange={(event) => setPurchaseBudget(Number(event.target.value))}
+              className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white"
+            />
+          </label>
+        </div>
+        <p className="text-[11px] text-white/50 mt-2">Changing either budget recalculates the flow using its configured channel bounds.</p>
+        {error && data && <p className="text-xs text-red-200 mt-2">{error}</p>}
+      </Card>
+
+      {/* 4 Connected Interactive Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative">
+        {/* Step 1: Descriptive */}
+        <div className="glass rounded-2xl p-5 border border-bright/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/60 lg:after:text-xl">
+          <div className="absolute -top-3 left-4 bg-gradient-to-r from-bright to-teal-500 text-abyss font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
+            Step 1: Descriptive
+          </div>
+          <div className="mt-2 space-y-3">
+            <div className="flex items-center justify-between text-xs text-white/60">
+              <span>"What Happened?"</span>
+              <span className="text-bright font-mono font-bold">Historical Data</span>
             </div>
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Peak Revenue Month</span>
+                <span className="text-base font-bold text-white">{descriptive.peakMonth || 'Not available'}</span>
+                <span className="text-[11px] text-bright block">{descriptive.peakMonthRevenue == null ? 'No complete month' : formatCurrency(descriptive.peakMonthRevenue)}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Top Category</span>
+                <span className="text-sm font-bold text-white">{descriptive.topCategory || 'Not available'}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Best Channel by ROI</span>
+                <span className="text-sm font-bold text-emerald-300">{descriptive.bestChannel ? `${descriptive.bestChannel} (${descriptive.bestChannelRoi}%)` : 'Not available'}</span>
+              </div>
+            </div>
+          </div>
 
-            <div className="grid grid-cols-4 gap-4 relative">
-              {steps.map((step, idx) => (
-                <div key={step.id} className="relative flex flex-col items-center text-center">
-                  {/* Step Circle */}
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 z-10 transition-all duration-300 hover:scale-105 bg-gradient-to-br ${step.gradient} text-white ${step.glow} ${step.border || ''}`}>
-                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={step.icon} />
-                    </svg>
-                  </div>
+          <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+            <span className="text-[11px] text-white/40">Feeds → Monthly Trends</span>
+            <button
+              onClick={() => handleJump('Descriptive')}
+              className="text-xs text-bright hover:underline font-semibold flex items-center gap-1"
+            >
+              See Details →
+            </button>
+          </div>
+        </div>
 
-                  {/* Step Number */}
-                  <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-gradient-to-br from-accent to-yellow-500 text-abyss text-xs font-bold flex items-center justify-center shadow-lg z-20">
-                    {step.id}
+        {/* Step 2: Predictive */}
+        <div className="glass rounded-2xl p-5 border border-sky-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/60 lg:after:text-xl">
+          <div className="absolute -top-3 left-4 bg-gradient-to-r from-sky-400 to-blue-500 text-white font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
+            Step 2: Predictive
+          </div>
+          <div className="mt-2 space-y-3">
+            <div className="flex items-center justify-between text-xs text-white/60">
+              <span>"What Will Happen?"</span>
+              <span className="text-sky-300 font-mono font-bold">Forecast Models</span>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Recommended Model</span>
+                <span className="text-sm font-bold text-white">{predictive.modelUsed}</span>
+                <span className="text-[11px] text-sky-300 block font-mono">R² = {predictive.rSquared} | RMSE ₱{predictive.rmse?.toLocaleString()}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Next Quarter Forecast</span>
+                <span className="text-base font-bold text-sky-300 tabular-nums">{formatCurrency(predictive.nextQuarterForecast)}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Stockout Risks</span>
+                <span className="text-sm font-bold text-amber-300">{predictive.highRiskStockoutCount} high risk items</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Predicted Channel ROI</span>
+                {(predictive.predictedChannelRoi || []).map((channel: any) => (
+                  <span key={channel.channel} className="flex justify-between gap-2 text-[11px] text-white/80 mt-1">
+                    <span>{channel.channel}</span><strong>{channel.predictedRoi}%</strong>
                   </span>
-
-                  {/* Step Content */}
-                  <h4 className="font-bold text-white mb-2">{step.phase}</h4>
-                  <p className="text-sm text-white/65">{step.description}</p>
-
-                  {/* Arrow (except last) */}
-                  {idx < steps.length - 1 && (
-                    <svg className="absolute -right-4 top-8 w-8 h-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </div>
-              ))}
+                ))}
+                {predictive.predictedChannelRoi?.length === 0 && <span className="text-[11px] text-white/60">No campaign history</span>}
+              </div>
             </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+            <span className="text-[11px] text-white/40">Feeds → Elasticities & Risk</span>
+            <button
+              onClick={() => handleJump('Predictive')}
+              className="text-xs text-sky-300 hover:underline font-semibold flex items-center gap-1"
+            >
+              See Details →
+            </button>
+          </div>
+        </div>
+
+        {/* Step 3: Prescriptive */}
+        <div className="glass rounded-2xl p-5 border border-amber-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/60 lg:after:text-xl">
+          <div className="absolute -top-3 left-4 bg-gradient-to-r from-amber-400 to-yellow-500 text-abyss font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
+            Step 3: Prescriptive
+          </div>
+          <div className="mt-2 space-y-3">
+            <div className="flex items-center justify-between text-xs text-white/60">
+              <span>"What Should We Do?"</span>
+              <span className="text-amber-300 font-mono font-bold">Optimization</span>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Optimized Budget Split</span>
+                <span className="text-base font-bold text-white tabular-nums">{formatCurrency(prescriptive.recommendedBudget)}</span>
+                <span className="text-[11px] text-emerald-300 block">Top Channel: {prescriptive.topBudgetChannel}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Expected Marketing Revenue</span>
+                <span className="text-base font-bold text-emerald-300 tabular-nums">{formatCurrency(prescriptive.expectedMarketingRevenue)}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">EOQ Reorder Orders</span>
+                <span className="text-sm font-bold text-amber-300">{prescriptive.reorderItemCount} items (₱{prescriptive.reorderCommittedCost?.toLocaleString()})</span>
+                {(prescriptive.reorderItems || []).map((item: any) => (
+                  <span key={item.productName} className="flex justify-between gap-2 text-[11px] text-white/80 mt-1">
+                    <span>{item.productName} × {item.quantity}</span><strong>{formatCurrency(item.totalCost)}</strong>
+                  </span>
+                ))}
+                {prescriptive.reorderItems?.length === 0 && <span className="block text-[11px] text-white/60 mt-1">No products currently meet reorder criteria.</span>}
+              </div>
+              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                <span className="text-white/50 block text-[10px] uppercase">Recommended Channel Split</span>
+                {(prescriptive.allocations || []).map((allocation: any) => (
+                  <span key={allocation.channel} className="flex justify-between gap-2 text-[11px] text-white/80 mt-1">
+                    <span>{allocation.channel} ({allocation.predictedRoi}% ROI)</span><strong>{formatCurrency(allocation.budget)}</strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+            <span className="text-[11px] text-white/40">Feeds → Final Decision</span>
+            <button
+              onClick={() => handleJump('Prescriptive')}
+              className="text-xs text-amber-300 hover:underline font-semibold flex items-center gap-1"
+            >
+              See Details →
+            </button>
+          </div>
+        </div>
+
+        {/* Step 4: Decision Execution */}
+        <div className="glass rounded-2xl p-5 border border-emerald-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group bg-emerald-500/5">
+          <div className="absolute -top-3 left-4 bg-gradient-to-r from-emerald-400 to-green-600 text-abyss font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
+            Step 4: Decision Impact
+          </div>
+          <div className="mt-2 space-y-3">
+            <div className="flex items-center justify-between text-xs text-white/60">
+              <span>"Action & Execution"</span>
+              <span className="text-emerald-300 font-mono font-bold">Outcome</span>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-emerald-200/70 block text-[10px] uppercase">Next-Quarter Average Monthly Forecast</span>
+                <span className="text-lg font-bold text-emerald-300 tabular-nums">{formatCurrency(decision.projectedMonthlyRevenue)}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-emerald-200/70 block text-[10px] uppercase">Estimated Marketing Scenario Uplift</span>
+                <span className="text-sm font-bold text-white">
+                  {decision.expectedMarketingUplift == null
+                    ? 'Not available'
+                    : `${decision.expectedMarketingUplift > 0 ? '+' : ''}${decision.expectedMarketingUplift}% vs historical mix`}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-emerald-200/70 block text-[10px] uppercase">Products Flagged High Risk</span>
+                <span className="text-sm font-bold text-white">{decision.highRiskProducts} products</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-emerald-200/70 block text-[10px] uppercase">Estimated Marketing Return After Spend</span>
+                <span className="text-sm font-bold text-white">{formatCurrency(decision.expectedMarketingProfit)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
+            <span className="text-[11px] text-emerald-200/90 font-medium">Scenario estimate</span>
+            <button
+              onClick={() => handleJump('Case Study')}
+              className="text-xs text-emerald-300 hover:underline font-semibold flex items-center gap-1"
+            >
+              Read Case Study →
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Vertical Stepper - Mobile */}
-      <div className="md:hidden glass rounded-2xl p-6 shadow-glass relative">
-        <h3 className="text-lg font-bold text-white mb-6 text-center">Analytics Decision Pipeline</h3>
-        {/* Connector line */}
-        <div className="absolute left-10 top-20 bottom-8 w-px bg-gradient-to-b from-bright via-sky to-steel opacity-30" />
-
-        <div className="space-y-0">
-          {steps.map((step, idx) => (
-            <div key={step.id} className="flex gap-4 relative">
-              {/* Step Circle */}
-              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 bg-gradient-to-br ${step.gradient} text-white shadow-lg ${step.id < 4 ? 'border-bright/30' : ''}`}>
-                <span className="font-bold text-lg">{step.id}</span>
-              </div>
-
-              {/* Connector line between steps */}
-              {idx < steps.length - 1 && (
-                <div className="absolute left-5 top-12 w-px h-8 bg-gradient-to-b from-bright/50 to-transparent" />
-              )}
-
-              {/* Step Content */}
-              <div className="flex-1 pb-6 border-b border-white/10 last:border-0 last:pb-0">
-                <h4 className="font-bold text-white">{step.phase}</h4>
-                <p className="text-sm text-white/65 mt-1">{step.description}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="glass rounded-2xl p-8">
-        <h3 className="text-xl font-bold text-white mb-4">Why This Pipeline Works</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {steps.map((step) => (
-            <div key={step.id} className="glass-subtle rounded-xl p-4 hover:bg-white/10 transition-colors">
-              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${step.gradient} flex items-center justify-center text-white font-bold mb-3 shadow-lg`}>
-                {step.id}
-              </div>
-              <p className="font-bold text-white mb-2">{step.phase}</p>
-              <p className="text-white/65 text-sm">{step.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Methodology Description Card */}
+      <Card>
+        <h3 className="text-base font-bold text-white mb-2">How Step-Wise Analytics Connects</h3>
+        <p className="text-xs text-white/70 leading-relaxed">
+          1. <strong>Descriptive Analytics</strong> analyzes historical orders, customer cohorts, and marketing performance to establish the revenue baseline (₱{descriptive.totalRevenue?.toLocaleString()}), identify profit drivers (top category: {descriptive.topCategory}), and determine channel ROI.<br />
+          2. <strong>Predictive Analytics</strong> takes this cleaned historical monthly time-series and fits forecasting models (Linear Regression and Moving Average), evaluating R² ({predictive.rSquared}) and RMSE to project forward revenue (₱{predictive.nextQuarterForecast?.toLocaleString()} next quarter) and pinpoint inventory stockout risks.<br />
+          3. <strong>Prescriptive Analytics</strong> uses recent campaign ROI estimates in a linear program with selected budget bounds and computes inventory reorder quantities using EOQ and reorder-point formulas.<br />
+          4. <strong>Decision Summary</strong> reports scenario-based marketing return estimates and products flagged for inventory review. Outcomes are not guaranteed and depend on the quality and coverage of available records.
+        </p>
+      </Card>
     </div>
   );
 }

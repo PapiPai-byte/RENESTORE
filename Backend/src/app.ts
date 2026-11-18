@@ -22,6 +22,22 @@ app.use(cors({
 app.use(csrfMiddleware);
 app.use(express.json());
 
+// Welcome endpoint
+app.get('/', (_req, res) => {
+  res.json({
+    message: 'Welcome to ReneStore API',
+    version: '1.0.0',
+    frontend: env.CLIENT_URL,
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth/*',
+      products: '/api/products/*',
+      orders: '/api/orders/*',
+      chat: '/api/chat/*',
+    }
+  });
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

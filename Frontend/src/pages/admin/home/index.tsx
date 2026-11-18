@@ -11,68 +11,48 @@ import PrescriptiveTab from '@/components/features/dashboard/Prescriptive';
 import CaseStudyTab from '@/components/features/dashboard/CaseStudy';
 import ProcessFlowTab from '@/components/features/dashboard/ProcessFlow';
 
-const kpiIcons = ['Total Revenue', 'Total Orders', 'Avg Order Value', 'Profit Margin', 'Total Customers'];
-
-/* Skeleton KPI card — matches real card height */
+/* Skeleton KPI card */
 const SkeletonKpiCard = () => (
   <div className="glass relative overflow-hidden min-h-[132px] animate-shimmer" aria-label="Loading metric" role="status">
-    {/* Title bar placeholder */}
     <div className="flex items-center gap-3 px-5 pt-5">
       <div className="w-10 h-10 rounded-xl bg-white/10 flex-shrink-0" />
       <div className="h-3 w-24 rounded bg-white/10" />
     </div>
-    {/* Value placeholder */}
     <div className="mt-4 ml-5 h-8 w-32 rounded bg-white/10" />
-    {/* Accent bar */}
     <div className="absolute top-0 left-0 right-0 h-0.5 bg-white/10 rounded-t-[1rem]" />
   </div>
 );
 
-/* Skeleton chart card — matches Descriptive chart card heights */
-const SkeletonChartCard = ({ height }: { height: number }) => (
-  <div
-    className="glass relative overflow-hidden animate-shimmer"
-    style={{ minHeight: height }}
-    aria-label="Loading chart"
-    role="status"
-  >
-    {/* Title bar */}
-    <div className="flex items-start justify-between px-6 pt-5 pb-2">
-      <div>
-        <div className="h-5 w-40 rounded bg-white/10 mb-1.5" />
-        <div className="h-3 w-56 rounded bg-white/10" />
-      </div>
-    </div>
-    {/* Chart placeholder */}
-    <div className="px-6 pb-5 mt-1">
-      <div className="w-full rounded-xl bg-white/8" style={{ height: height - 72 }} />
-    </div>
-  </div>
-);
-
 export default function AdminHome() {
+  const sampleDataMode = import.meta.env.VITE_USE_MOCK === 'true';
   const [activeTab, setActiveTab] = useState('Descriptive');
   const [kpis, setKpis] = useState<any>(null);
+  const [dataOverview, setDataOverview] = useState<any>(null);
+  const [showDataOverview, setShowDataOverview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
-  const fetchKPIs = async () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const descriptive = await analyticsService.getDescriptive();
+      const [descriptive, overview] = await Promise.all([
+        analyticsService.getDescriptive(),
+        analyticsService.getDataOverview().catch(() => null),
+      ]);
       setKpis(descriptive.kpis);
+      setDataOverview(overview);
       setLastUpdated(new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }));
     } catch (e: any) {
-      setError(e.message ?? 'Failed to load analytics');
+      setError(e.message ?? 'Failed to load analytics data');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchKPIs();
+    fetchDashboardData();
   }, []);
 
   const tabs = ['Descriptive', 'Predictive', 'Prescriptive', 'Case Study', 'Process Flow'];
@@ -81,44 +61,123 @@ export default function AdminHome() {
     'Descriptive': <DescriptiveTab />,
     'Predictive': <PredictiveTab />,
     'Prescriptive': <PrescriptiveTab />,
-    'Case Study': <CaseStudyTab />,
-    'Process Flow': <ProcessFlowTab />,
+    'Case Study': <CaseStudyTab onTabChange={setActiveTab} />,
+    'Process Flow': <ProcessFlowTab onTabChange={setActiveTab} />,
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      {/* Page header */}
-      <div className="mb-6 flex items-start justify-between flex-wrap gap-3">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
+      {/* Page Header */}
+      <div className="mb-6 flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-[30px] leading-tight font-bold text-white tracking-wide mb-1">
-            Analytics Dashboard
-          </h1>
-          <p className="text-white/60 text-sm">Sales performance, forecasts and recommendations at a glance</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-[30px] leading-tight font-bold text-white tracking-wide">
+              Analytics Dashboard
+            </h1>
+            <span className="glass-subtle text-xs px-2.5 py-1 rounded-full text-bright font-medium border border-bright/30">
+              Capstone BA
+            </span>
+            {sampleDataMode && (
+              <span className="bg-amber-500/20 text-amber-100 text-xs px-2.5 py-1 rounded-full border border-amber-300/50 font-bold">
+                SAMPLE DATA
+              </span>
+            )}
+          </div>
+          <p className="text-white/60 text-sm mt-1">
+            Data-driven intelligence: Descriptive, Predictive, and Prescriptive decision pipeline
+          </p>
         </div>
-        {lastUpdated && (
-          <span className="glass-subtle text-[11px] text-white/65 px-3 py-1.5 rounded-full flex-shrink-0 mt-1">
-            Last updated: {lastUpdated}
-          </span>
-        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowDataOverview(!showDataOverview)}
+            className="glass px-3.5 py-2 rounded-xl text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2 border border-white/15"
+          >
+            <svg className="w-4 h-4 text-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7zM9 9h6M9 13h6M9 17h4" />
+            </svg>
+            Data Overview ({dataOverview?.allVariablesPass ? '5/5 Counts ≥ 50' : 'Data Audit'})
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          </button>
+
+          {lastUpdated && (
+            <span className="glass-subtle text-[11px] text-white/65 px-3 py-2 rounded-xl flex-shrink-0">
+              Updated: {lastUpdated}
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Data Overview Collapsible Drawer (R3 verification) */}
+      {showDataOverview && dataOverview && (
+        <div className="glass rounded-2xl p-6 mb-8 border border-bright/30 shadow-glass animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>Database Record Counts (Requirement R3)</span>
+                {dataOverview.allVariablesPass && (
+                  <span className="bg-emerald-500/20 text-emerald-300 text-xs px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    All Required Tables ≥ 50 Rows
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-white/60 mt-0.5">
+                Counts show stored rows only; they do not verify that records are real or representative.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDataOverview(false)}
+              className="text-white/40 hover:text-white text-sm px-2 py-1"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {dataOverview.tables?.map((t: any) => (
+              <div
+                key={t.key}
+                className={`p-3.5 rounded-xl border transition-all ${
+                  t.passed
+                    ? 'bg-emerald-500/10 border-emerald-500/30 glass-subtle'
+                    : 'bg-red-500/10 border-red-500/30'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-white/80 truncate" title={t.name}>{t.name}</span>
+                  {t.passed ? (
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs font-bold">
+                      ✓
+                    </span>
+                  ) : (
+                    <span className="text-xs text-red-400 font-bold">FAIL</span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-white tabular-nums">{t.count}</span>
+                  <span className="text-xs text-white/50">/ min {t.minRequired}</span>
+                </div>
+                <p className="text-[11px] text-white/60 mt-1">
+                  {t.required ? 'Required variable' : 'Additional table'}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-white/60 flex-wrap gap-2">
+            <span>Date Range: <strong>{dataOverview.dateRange?.start?.slice(0, 10)}</strong> to <strong>{dataOverview.dateRange?.end?.slice(0, 10)}</strong></span>
+            <span>Import script available: <code className="text-bright bg-white/10 px-2 py-0.5 rounded font-mono">npm run import:data</code></span>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <>
           {/* Skeleton KPI cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
-            {[...Array(5)].map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {[...Array(6)].map((_, i) => (
               <SkeletonKpiCard key={i} />
             ))}
-          </div>
-
-          {/* Skeleton chart placeholder */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <SkeletonChartCard height={340} />
-            <SkeletonChartCard height={300} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <SkeletonChartCard height={300} />
-            <SkeletonChartCard height={300} />
           </div>
         </>
       ) : error ? (
@@ -130,30 +189,28 @@ export default function AdminHome() {
           </div>
           <ErrorMessage message={error} />
           <button
-            onClick={fetchKPIs}
-            className="mt-4 inline-flex items-center gap-2 glass-subtle text-white/80 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky/70"
+            onClick={fetchDashboardData}
+            className="mt-4 inline-flex items-center gap-2 glass-subtle text-white/80 hover:text-white px-4 py-2 rounded-xl text-sm font-medium transition-colors"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
             Retry
           </button>
         </div>
       ) : (
         <>
-          {/* KPI Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
+          {/* 6 Comprehensive KPI Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
             <KpiCard title="Total Revenue" value={kpis?.totalRevenue ?? 0} delay={0} />
-            <KpiCard title="Total Orders" value={kpis?.totalOrders ?? 0} delay={60} />
+            <KpiCard title="Total Profit" value={kpis?.totalProfit ?? 0} delay={40} />
+            <KpiCard title="Total Orders" value={kpis?.totalOrders ?? 0} delay={80} />
             <KpiCard title="Avg Order Value" value={kpis?.avgOrderValue ?? 0} delay={120} />
-            <KpiCard title="Profit Margin" value={`${kpis?.profitMargin ?? 0}%`} delay={180} />
-            <KpiCard title="Total Customers" value={kpis?.totalCustomers ?? 0} delay={240} />
+            <KpiCard title="Profit Margin" value={`${kpis?.profitMargin ?? 0}%`} delay={160} />
+            <KpiCard title="Stockout Items" value={kpis?.stockoutCount ?? 0} delay={200} />
           </div>
 
-          {/* Tabs */}
+          {/* Navigation Tabs */}
           <Tabs tabs={tabs} activeTab={activeTab} onSelect={setActiveTab} />
 
-          {/* Tab Content with fade transition */}
+          {/* Active Tab Content */}
           <div key={activeTab} className="mt-6 animate-slide-up">
             {tabContent[activeTab]}
           </div>

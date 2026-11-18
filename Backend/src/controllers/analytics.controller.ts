@@ -1,268 +1,368 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { db } from '../db';
-import { orders, orderItems, products, customers, transactions, marketingCampaigns } from '../db/schema';
+import { db, pool } from '../db';
+import { marketingCampaigns } from '../db/schema';
 import { asyncHandler } from '../utils/async-handler';
-import { AppError } from '../lib/app-error';
 import { authenticate, authorize } from '../middlewares/auth';
-import { eq, desc } from 'drizzle-orm';
-import { pool } from '../db';
+import { sql } from 'drizzle-orm';
+import descriptiveService from '../services/descriptive-service';
+import predictiveService from '../services/predictive-service';
+import { optimizeBudget, generateInventoryPlan } from '../services/prescriptive-service';
+import type { MarketingRow } from '../services/prescriptive-service';
 
 const router = Router();
 
-// Helper for raw SQL
-async function rawQuery<T = any>(sql: string, params?: any[]): Promise<T[]> {
-  const client = await pool.connect();
-  try {
-    const result = await client.query(sql, params || []);
-    return result.rows as T[];
-  } finally {
-    client.release();
-  }
+async function getCampaignOptimizationRows(): Promise<MarketingRow[]> {
+  const campaigns = await db.select().from(marketingCampaigns).orderBy(sql`start_date ASC`);
+  return campaigns.map(campaign => ({
+    id: campaign.id,
+    channel: campaign.channel,
+    date: campaign.startDate,
+    spend: campaign.spend,
+    revenue: campaign.revenueGenerated,
+    impressions: campaign.impressions,
+    clicks: campaign.clicks,
+    conversions: campaign.conversions,
+    orders: campaign.ordersGenerated,
+  }));
 }
 
-// Descriptive analytics
-router.get('/descriptive', authenticate, authorize('admin'), asyncHandler(async (_req: Request, res: Response) => {
-  const revenueResult = await db.select({ total: orders.totalAmount }).from(orders).where(eq(orders.status, 'completed'));
-  const totalRevenue = revenueResult.reduce((sum: number, r: any) => sum + (r.total || 0), 0);
+// ── DESCRIPTIVE ANALYTICS ────────────────────────────────────────────────────
+router.get(
+  '/descriptive',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const data = await descriptiveService.getAnalytics();
+    res.json(data);
+  })
+);
 
-  const ordersResult = await db.select({ count: orders.id }).from(orders).where(eq(orders.status, 'completed'));
-  const totalOrders = ordersResult.length;
+// ── PREDICTIVE ANALYTICS ─────────────────────────────────────────────────────
+router.get(
+  '/predictive',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const months = parseInt(req.query.months as string, 10) || 6;
+    const data = await predictiveService.getAnalytics(months);
+    res.json(data);
+  })
+);
 
-  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+// ── PRESCRIPTIVE ANALYTICS: BUDGET OPTIMIZATION ─────────────────────────────
+router.post(
+  '/prescriptive/optimize-budget',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = z.object({
+      totalBudget: z.number().positive(),
+      constraints: z.record(
+        z.string(),
+        z.object({ min: z.number().min(0), max: z.number().min(0) })
+      ),
+      purchaseBudget: z.number().nonnegative().optional().default(250000),
+    }).parse(req.body);
 
-  const orderItemsResult = await db.select().from(orderItems);
-  let totalCost = 0;
-  const productCache = new Map<number, number>();
-  for (const item of orderItemsResult) {
-    let cost = productCache.get(item.productId);
-    if (cost === undefined) {
-      const [product] = await db.select({ cost: products.cost }).from(products).where(eq(products.id, item.productId));
-      cost = product ? product.cost : 0;
-      productCache.set(item.productId, cost);
-    }
-    totalCost += cost * item.quantity;
-  }
-  const profitMargin = totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0;
+    const rows = await getCampaignOptimizationRows();
+    const result = await optimizeBudget(
+      body.totalBudget,
+      body.constraints,
+      rows,
+      body.purchaseBudget
+    );
+    res.json(result);
+  })
+);
 
-  const customersResult = await db.select({ count: customers.id }).from(customers);
-  const totalCustomers = customersResult.length;
+// ── PRESCRIPTIVE: INVENTORY REORDER PLAN ─────────────────────────────────────
+router.get(
+  '/prescriptive/inventory-plan',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const budget = parseFloat(req.query.budget as string) || 250000;
+    const plan = await generateInventoryPlan(budget);
+    res.json(plan);
+  })
+);
 
-  // Sales by month
-  const salesByMonthRaw = await rawQuery(
-    `SELECT TO_CHAR(order_date, 'YYYY-MM') as month, COALESCE(SUM(total_amount), 0) as revenue, COUNT(*) as orders FROM orders WHERE status = 'completed' GROUP BY TO_CHAR(order_date, 'YYYY-MM') ORDER BY month DESC LIMIT 12`
-  );
-  const salesByMonth: Array<{ month: string; revenue: number; orders: number }> = salesByMonthRaw.map((r: any) => ({ month: r.month, revenue: Number(r.revenue), orders: Number(r.orders) })).reverse();
+// ── DATA OVERVIEW (R3: 5 Variables with >= 50 Records Verification) ─────────
+router.get(
+  '/data-overview',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const requiredTables = new Set(['products', 'customers', 'orders', 'marketing_campaigns', 'inventory_purchases']);
+      const tableQueries = [
+        { key: 'products', name: 'Products Catalog', table: 'products' },
+        { key: 'customers', name: 'Customer Profiles', table: 'customers' },
+        { key: 'orders', name: 'Orders', table: 'orders' },
+        { key: 'order_items', name: 'Order Line Items', table: 'order_items' },
+        { key: 'transactions', name: 'Transactions', table: 'transactions' },
+        { key: 'marketing_campaigns', name: 'Marketing Campaigns', table: 'marketing_campaigns' },
+        { key: 'marketing_performance', name: 'Marketing Performance', table: 'marketing_performance' },
+        { key: 'inventory_purchases', name: 'Inventory Purchases', table: 'inventory_purchases' },
+        { key: 'suppliers', name: 'Suppliers', table: 'suppliers' },
+        { key: 'users', name: 'Users', table: 'users' },
+        { key: 'refresh_tokens', name: 'Refresh Tokens', table: 'refresh_tokens' },
+        { key: 'faqs', name: 'FAQs', table: 'faqs' },
+        { key: 'chat_logs', name: 'Chat Logs', table: 'chat_logs' },
+      ];
 
-  // Sales by category
-  const salesByCategoryRaw = await rawQuery(
-    `SELECT p.category, COALESCE(SUM(oi.quantity * oi.unit_price), 0) as revenue FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status = 'completed' GROUP BY p.category ORDER BY revenue DESC`
-  );
-  const salesByCategory: Array<{ category: string; revenue: number }> = salesByCategoryRaw.map((r: any) => ({ category: r.category, revenue: Number(r.revenue) }));
+      const tables = [];
+      let allVariablesPass = true;
 
-  // Top products
-  const topProductsRaw = await rawQuery(
-    `SELECT p.name, COALESCE(SUM(oi.quantity * oi.unit_price), 0) as revenue, COALESCE(SUM(oi.quantity), 0) as unitsSold FROM order_items oi JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE o.status = 'completed' GROUP BY p.name ORDER BY revenue DESC LIMIT 5`
-  );
-  const topProducts: Array<{ name: string; revenue: number; unitsSold: number }> = topProductsRaw.map((r: any) => ({ name: r.name, revenue: Number(r.revenue), unitsSold: Number(r.unitsSold) }));
-
-  // Sales by city
-  const salesByCityRaw = await rawQuery(
-    `SELECT c.city, COALESCE(SUM(o.total_amount), 0) as revenue FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.status = 'completed' GROUP BY c.city ORDER BY revenue DESC`
-  );
-  const salesByCity: Array<{ city: string; revenue: number }> = salesByCityRaw.map((r: any) => ({ city: r.city, revenue: Number(r.revenue) }));
-
-  // Campaign performance
-  const campaigns = await db.select().from(marketingCampaigns);
-  const campaignPerformance = campaigns.map((c: any) => {
-    const spend = Number(c.spend) || 0;
-    const conversions = Number(c.conversions) || 0;
-    const clicks = Number(c.clicks) || 0;
-    const conversionRate = clicks > 0 ? (conversions / clicks) * 100 : 0;
-    const costPerConversion = conversions > 0 ? spend / conversions : 0;
-    const roi = spend > 0 ? ((spend * 3 - spend) / spend) * 100 : 0;
-    return {
-      channel: c.channel,
-      spend,
-      clicks,
-      conversions,
-      conversionRate: Number(conversionRate.toFixed(2)),
-      costPerConversion: Number(costPerConversion.toFixed(2)),
-      roi: Number(roi.toFixed(2)),
-    };
-  });
-
-  res.json({
-    kpis: {
-      totalRevenue: Number(totalRevenue.toFixed(2)),
-      totalOrders,
-      avgOrderValue: Number(avgOrderValue.toFixed(2)),
-      profitMargin: Number(profitMargin.toFixed(2)),
-      totalCustomers,
-    },
-    salesByMonth,
-    salesByCategory,
-    topProducts,
-    salesByCity,
-    campaignPerformance,
-  });
-}));
-
-// Predictive analytics
-router.get('/predictive', authenticate, authorize('admin'), asyncHandler(async (req: Request, res: Response) => {
-  const monthsAhead = parseInt(req.query.months as string) || 6;
-
-  const salesResult = await rawQuery(
-    `SELECT TO_CHAR(order_date, 'YYYY-MM') as month, COALESCE(SUM(total_amount), 0) as revenue FROM orders WHERE status = 'completed' GROUP BY TO_CHAR(order_date, 'YYYY-MM') ORDER BY month`
-  );
-
-  const history: Array<{ month: string; revenue: number }> = salesResult.map((r: any) => ({ month: r.month, revenue: Number(r.revenue) }));
-  const dataPoints = history.map((h, i) => ({ x: i, y: h.revenue }));
-
-  const { linearRegression } = await import('../utils/regression');
-  const regression = linearRegression(dataPoints);
-
-  const forecast: Array<{ month: string; revenue: number }> = [];
-  for (let i = dataPoints.length; i < dataPoints.length + monthsAhead; i++) {
-    const predicted = regression.slope * i + regression.intercept;
-    forecast.push({
-      month: history[history.length - 1]?.month || '2025-01',
-      revenue: Number(predicted.toFixed(2)),
-    });
-  }
-
-  const campaigns = await db.select().from(marketingCampaigns);
-  const channelModels = campaigns.map((c: any, idx: number) => ({
-    channel: c.channel,
-    slope: Number(((idx + 1) * 1.5 + Math.random()).toFixed(2)),
-    intercept: Number(((idx + 1) * 5000 + 5000).toFixed(2)),
-    rSquared: Number((0.7 + Math.random() * 0.2).toFixed(2)),
-  }));
-
-  res.json({
-    method: 'Linear Regression',
-    equation: regression.equation,
-    rSquared: regression.rSquared,
-    history,
-    forecast,
-    channelModels,
-  });
-}));
-
-// Prescriptive analytics
-router.post('/prescriptive', authenticate, authorize('admin'), asyncHandler(async (req: Request, res: Response) => {
-  const body = z.object({
-    totalBudget: z.number().positive(),
-    minPerChannel: z.record(z.string(), z.number()),
-    maxPerChannel: z.record(z.string(), z.number()),
-  }).parse(req.body);
-
-  const channels = Object.keys(body.minPerChannel);
-  const totalBudget = body.totalBudget;
-
-  let remaining = totalBudget;
-  const allocation: Array<{ channel: string; recommendedSpend: number; expectedRevenue: number; expectedRoi: number }> = [];
-
-  const channelsData = await db.select().from(marketingCampaigns);
-  const channelStats = channels.reduce((acc: Record<string, { spend: number; conversions: number; conversionRate: number }>, channel) => {
-    const channelCampaigns = channelsData.filter((c: any) => c.channel === channel);
-    const totalSpend = channelCampaigns.reduce((sum: number, c: any) => sum + Number(c.spend), 0);
-    const totalConversions = channelCampaigns.reduce((sum: number, c: any) => sum + Number(c.conversions), 0);
-    const avgConversionRate = totalSpend > 0 ? totalConversions / (totalSpend / 100) : 0;
-    acc[channel] = { spend: totalSpend, conversions: totalConversions, conversionRate: avgConversionRate };
-    return acc;
-  }, {} as Record<string, { spend: number; conversions: number; conversionRate: number }>);
-
-  // Greedy allocation
-  while (remaining > 0) {
-    let bestChannel = '';
-    let bestMarginalROI = -Infinity;
-
-    for (const channel of channels) {
-      const currentSpend = allocation.find(a => a.channel === channel)?.recommendedSpend || 0;
-      const maxSpend = body.maxPerChannel[channel] || totalBudget;
-
-      if (currentSpend >= maxSpend) continue;
-
-      const minSpend = body.minPerChannel[channel] || 0;
-      if (currentSpend < minSpend) {
-        const needed = minSpend - currentSpend;
-        if (remaining >= needed) {
-          allocation.push({
-            channel,
-            recommendedSpend: minSpend,
-            expectedRevenue: minSpend * (1 + (channelStats[channel]?.conversionRate || 2)),
-            expectedRoi: Number(((channelStats[channel]?.conversionRate || 2)) * 100),
-          });
-          remaining -= needed;
+      for (const t of tableQueries) {
+        const countRes = await client.query(`SELECT COUNT(*) AS count FROM "${t.table}"`);
+        const count = Number(countRes.rows[0].count);
+        const required = requiredTables.has(t.table);
+        const meetsThreshold = count >= 50;
+        if (required && !meetsThreshold) {
+          allVariablesPass = false;
         }
-        continue;
+
+        tables.push({
+          key: t.key,
+          name: t.name,
+          count,
+          required,
+          minRequired: required ? 50 : null,
+          passed: meetsThreshold,
+        });
       }
 
-      const marginalROI = (channelStats[channel]?.conversionRate || 0) * (1 + Math.random());
-      if (marginalROI > bestMarginalROI) {
-        bestMarginalROI = marginalROI;
-        bestChannel = channel;
-      }
-    }
+      // Date range of orders
+      const dateRes = await client.query(`
+        SELECT
+          MIN(order_date) as start_date,
+          MAX(order_date) as end_date
+        FROM orders
+      `);
 
-    if (!bestChannel) break;
-
-    const currentSpend = allocation.find(a => a.channel === bestChannel)?.recommendedSpend || 0;
-    const maxSpend = body.maxPerChannel[bestChannel] || totalBudget;
-    const increment = Math.min(1000, maxSpend - currentSpend, remaining);
-
-    if (increment <= 0) break;
-
-    const existing = allocation.find(a => a.channel === bestChannel);
-    if (existing) {
-      existing.recommendedSpend += increment;
-      existing.expectedRevenue += increment * (1 + (channelStats[bestChannel]?.conversionRate || 2));
-      existing.expectedRoi = Number(((existing.expectedRevenue / existing.recommendedSpend) - 1) * 100);
-    } else {
-      allocation.push({
-        channel: bestChannel,
-        recommendedSpend: currentSpend + increment,
-        expectedRevenue: (currentSpend + increment) * (1 + (channelStats[bestChannel]?.conversionRate || 2)),
-        expectedRoi: Number(((channelStats[bestChannel]?.conversionRate || 2)) * 100),
+      res.json({
+        allVariablesPass,
+        tables,
+        dateRange: {
+          start: dateRes.rows[0]?.start_date,
+          end: dateRes.rows[0]?.end_date,
+        },
       });
+    } finally {
+      client.release();
     }
+  })
+);
 
-    remaining -= increment;
-  }
+// ── PROCESS FLOW (R6: Descriptive -> Predictive -> Prescriptive -> Decision) ─
+router.get(
+  '/process-flow',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { totalBudget, purchaseBudget } = z.object({
+      totalBudget: z.coerce.number().positive().optional().default(100000),
+      purchaseBudget: z.coerce.number().nonnegative().optional().default(250000),
+    }).parse(req.query);
 
-  for (const channel of channels) {
-    const existing = allocation.find(a => a.channel === channel);
-    const minSpend = body.minPerChannel[channel] || 0;
-    if (!existing && minSpend > 0) {
-      allocation.push({
-        channel,
-        recommendedSpend: minSpend,
-        expectedRevenue: minSpend * 3,
-        expectedRoi: 200,
+    // Descriptive stage outputs
+    const descData = await descriptiveService.getAnalytics();
+    const completeMonths = descData.salesByMonth.filter(month => !month.isPartial);
+    const peakMonth = completeMonths.reduce(
+      (max, month) => (!max || month.revenue > max.revenue ? month : max),
+      null as (typeof completeMonths)[number] | null
+    );
+    const topCategory = descData.salesByCategory[0];
+    const bestChannel = descData.campaignPerformance.reduce(
+      (best, campaign) => !best || campaign.roi > best.roi ? campaign : best,
+      undefined as (typeof descData.campaignPerformance)[number] | undefined
+    );
+
+    // Predictive stage outputs
+    const predData = await predictiveService.getAnalytics(3);
+    const nextQuarterForecast = predData.forecast.reduce((sum, f) => sum + f.linearRegression, 0);
+    const highRiskStockouts = predData.stockoutRisks.filter(s => s.riskLevel === 'High').length;
+
+    // Prescriptive stage outputs
+    const rows = await getCampaignOptimizationRows();
+    const defaultConstraints = {
+      'Facebook': { min: 5000, max: 40000 },
+      'Google Ads': { min: 5000, max: 40000 },
+      'Email': { min: 2000, max: 20000 },
+      'TikTok': { min: 3000, max: 30000 },
+      'Instagram': { min: 3000, max: 25000 },
+    };
+    const prescData = await optimizeBudget(totalBudget, defaultConstraints, rows, purchaseBudget);
+
+    // Decision stage summary
+    const decisionImpact = {
+      projectedMonthlyRevenue: Math.round(nextQuarterForecast / 3),
+      expectedMarketingUplift: prescData.baselines[1]?.upliftPct ?? null,
+      highRiskProducts: highRiskStockouts,
+      expectedMarketingProfit: prescData.totalExpectedRevenue - prescData.totalAllocated,
+    };
+
+    res.json({
+      descriptive: {
+        totalRevenue: descData.kpis.totalRevenue,
+        totalProfit: descData.kpis.totalProfit,
+        profitMargin: descData.kpis.profitMargin,
+        peakMonth: peakMonth?.month ?? null,
+        peakMonthRevenue: peakMonth?.revenue ?? null,
+        topCategory: topCategory?.category ?? null,
+        bestChannel: bestChannel?.channel ?? null,
+        bestChannelRoi: bestChannel?.roi ?? null,
+      },
+      predictive: {
+        modelUsed: predData.models.recommendedModel,
+        rSquared: predData.models.linearRegression.rSquared,
+        rmse: predData.models.linearRegression.rmse,
+        nextQuarterForecast: Math.round(nextQuarterForecast),
+        highRiskStockoutCount: highRiskStockouts,
+        predictedChannelRoi: predData.channelPredictions.map(c => ({
+          channel: c.channel,
+          predictedRoi: c.predictedRoi,
+        })),
+      },
+      prescriptive: {
+        recommendedBudget: prescData.totalAllocated,
+        expectedMarketingRevenue: prescData.totalExpectedRevenue,
+        overallRoi: prescData.overallROI,
+        reorderItemCount: prescData.inventoryPlan.itemsToReorderCount,
+        reorderCommittedCost: prescData.inventoryPlan.totalCommittedCost,
+        topBudgetChannel: prescData.allocations.sort((a, b) => b.budget - a.budget)[0]?.channel,
+        allocations: prescData.allocations.map(allocation => ({
+          channel: allocation.channel,
+          budget: allocation.budget,
+          predictedRoi: allocation.roi,
+        })),
+        reorderItems: prescData.inventoryPlan.items
+          .filter(item => item.recommendedOrderQty > 0)
+          .map(item => ({
+            productName: item.productName,
+            quantity: item.recommendedOrderQty,
+            totalCost: item.totalCost,
+          })),
+      },
+      scenario: { totalBudget, purchaseBudget },
+      decision: decisionImpact,
+    });
+  })
+);
+
+// ── CASE STUDY (R5: Real computed statistics and overview) ──────────────────
+router.get(
+  '/case-study',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      // Table record counts
+      const counts = await Promise.all([
+        client.query('SELECT COUNT(*) AS c FROM orders'),
+        client.query('SELECT COUNT(*) AS c FROM customers'),
+        client.query('SELECT COUNT(*) AS c FROM products'),
+        client.query('SELECT COUNT(*) AS c FROM marketing_campaigns'),
+        client.query('SELECT COUNT(*) AS c FROM inventory_purchases'),
+        client.query('SELECT MIN(order_date) AS start, MAX(order_date) AS end FROM orders'),
+        client.query('SELECT MIN(order_date) AS start, MAX(order_date) AS end FROM orders WHERE status = $1', ['completed']),
+        client.query('SELECT MIN(signup_date) AS start, MAX(signup_date) AS end FROM customers'),
+        client.query('SELECT MIN(start_date) AS start, MAX(end_date) AS end FROM marketing_campaigns'),
+        client.query('SELECT MIN(purchase_date) AS start, MAX(purchase_date) AS end FROM inventory_purchases'),
+      ]);
+
+      const [orderCnt, custCnt, prodCnt, campaignCnt, invCnt] = counts.slice(0, 5).map(r => Number(r.rows[0].c));
+      const ordersDateRange = counts[5].rows[0];
+      const completedDateRange = counts[6].rows[0];
+      const customerDateRange = counts[7].rows[0];
+      const campaignDateRange = counts[8].rows[0];
+      const purchaseDateRange = counts[9].rows[0];
+
+      // Descriptive and predictive metrics
+      const desc = await descriptiveService.getAnalytics();
+      const pred = await predictiveService.getAnalytics(6);
+
+      // Prescriptive optimization result
+      const rows = await getCampaignOptimizationRows();
+      const presc = await optimizeBudget(100000, {
+        'Facebook': { min: 5000, max: 40000 },
+        'Google Ads': { min: 5000, max: 40000 },
+        'Email': { min: 2000, max: 20000 },
+        'TikTok': { min: 3000, max: 30000 },
+        'Instagram': { min: 3000, max: 25000 },
+      }, rows);
+
+      const completeMonths = desc.salesByMonth.filter(month => !month.isPartial);
+      const peakMonth = completeMonths.reduce(
+        (peak, month) => !peak || month.revenue > peak.revenue ? month : peak,
+        null as (typeof completeMonths)[number] | null
+      );
+      const topCategory = desc.salesByCategory[0];
+      const bestChannel = desc.campaignPerformance.reduce(
+        (best, campaign) => campaign.roi > (best?.roi ?? -Infinity) ? campaign : best,
+        desc.campaignPerformance[0]
+      );
+
+      res.json({
+        company: 'ReneStore Electronics & Tools',
+        industry: 'E-commerce (Computers, Hardware & Tools)',
+        problemBackground:
+          "ReneStore sells computer products but doesn't know which products and channels drive profit, can't reliably forecast demand, and has no data-driven plan for splitting its monthly marketing budget and inventory purchases. Business question: How should ReneStore allocate its marketing budget and stock purchases to maximize profit next month?",
+        dataVariables: [
+          { name: 'Products Catalog', table: 'products', records: prodCnt, source: 'Not documented', status: prodCnt >= 50 ? 'PASS' : 'FAIL', dateRange: null },
+          { name: 'Customer Profiles', table: 'customers', records: custCnt, source: 'Not documented', status: custCnt >= 50 ? 'PASS' : 'FAIL', dateRange: customerDateRange },
+          { name: 'Orders', table: 'orders', records: orderCnt, source: 'Not documented', status: orderCnt >= 50 ? 'PASS' : 'FAIL', dateRange: ordersDateRange },
+          { name: 'Marketing Campaigns', table: 'marketing_campaigns', records: campaignCnt, source: 'Not documented', status: campaignCnt >= 50 ? 'PASS' : 'FAIL', dateRange: campaignDateRange },
+          { name: 'Inventory Purchases (Suppliers)', table: 'inventory_purchases', records: invCnt, source: 'Not documented', status: invCnt >= 50 ? 'PASS' : 'FAIL', dateRange: purchaseDateRange },
+        ],
+        ordersDateRange: {
+          start: ordersDateRange.start,
+          end: ordersDateRange.end,
+          completedStart: completedDateRange.start,
+          completedEnd: completedDateRange.end,
+        },
+        computedResults: {
+          totalRevenue: desc.kpis.totalRevenue,
+          totalProfit: desc.kpis.totalProfit,
+          profitMargin: desc.kpis.profitMargin,
+          totalOrders: desc.kpis.totalOrders,
+          totalCustomers: desc.kpis.totalCustomers,
+          rSquared: pred.models.linearRegression.rSquared,
+          rmse: pred.models.linearRegression.rmse,
+          recommendedModel: pred.models.recommendedModel,
+          modelInterpretation: pred.models.linearRegression.interpretation,
+          historicalMonths: pred.sharedDateRange.totalHistoricalMonths,
+          peakMonth: peakMonth?.month ?? null,
+          peakMonthRevenue: peakMonth?.revenue ?? null,
+          topCategory: topCategory?.category ?? null,
+          bestChannel: bestChannel?.channel ?? null,
+          bestChannelRoi: bestChannel?.roi ?? null,
+          marketingUpliftPct: presc.baselines[1]?.upliftPct ?? null,
+          prescriptiveExpectedRevenue: presc.totalExpectedRevenue,
+          prescriptiveRoi: presc.overallROI,
+          budgetAllocations: presc.allocations.map(allocation => ({
+            channel: allocation.channel,
+            budget: allocation.budget,
+            expectedRevenue: allocation.expectedRevenue,
+            roi: allocation.roi,
+            changePct: allocation.changePct,
+          })),
+          actionList: presc.actionList,
+          inventoryItemsToReorder: presc.inventoryPlan.itemsToReorderCount,
+          reorderItems: presc.inventoryPlan.items
+            .filter(item => item.recommendedOrderQty > 0)
+            .map(item => ({ name: item.productName, quantity: item.recommendedOrderQty, totalCost: item.totalCost })),
+        },
       });
+    } finally {
+      client.release();
     }
-  }
-
-  allocation.sort((a, b) => b.expectedRoi - a.expectedRoi);
-
-  const totalExpectedRevenue = allocation.reduce((sum: number, a) => sum + a.expectedRevenue, 0);
-
-  const stockRecommendations = [
-    { category: 'Laptops', action: 'Increase stock by 15%', reason: 'High-value items with strong forecast' },
-    { category: 'Computers', action: 'Maintain current levels', reason: 'Stable demand pattern' },
-    { category: 'Accessories', action: 'Reduce by 10%', reason: 'Seasonal slowdown expected' },
-    { category: 'Tools', action: 'Increase stock by 10%', reason: 'Growing demand in Q4' },
-  ];
-
-  res.json({
-    method: 'Greedy Marginal ROI Optimization',
-    allocation,
-    totalExpectedRevenue: Number(totalExpectedRevenue.toFixed(2)),
-    stockRecommendations,
-    explanation: `Based on marginal ROI analysis, recommend allocating budget to highest-ROI channels first. Total expected revenue: PHP ${totalExpectedRevenue.toLocaleString()}.`,
-  });
-}));
+  })
+);
 
 export default router;

@@ -15,6 +15,41 @@
       "when": 0,
       "tag": "0001_chat_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 0,
+      "tag": "0002_marketing_performance",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794888562232,
+      "tag": "0003_absent_sebastian_shaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795010903460,
+      "tag": "0004_magical_fabian_cortez",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795012830636,
+      "tag": "0005_product_supplier_relationship",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795012943753,
+      "tag": "0006_real_data_import_fields",
+      "breakpoints": true
     }
   ]
 }
