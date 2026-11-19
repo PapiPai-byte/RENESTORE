@@ -1,18 +1,24 @@
 # ReneStore deployment notes
 
-The application has separate frontend, backend, and PostgreSQL components. Choose hosting providers that support the required Node.js runtime and PostgreSQL connectivity.
+The repository can deploy as one Vercel project with separate `backend` and `frontend` services. The root `vercel.json` routes `/api/*` to Express and all other paths to the Vite SPA.
 
-## Configure the deployment
+## Vercel Services
 
-- Deploy `Backend` as a Node.js service and configure `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`, `CLIENT_URL`, and any integration keys in the provider's secret manager.
-- Deploy `Frontend` as a static Vite application. Set `VITE_API_URL` to the deployed backend API URL and `VITE_USE_MOCK=false` to use the database-backed API.
+- Set the Vercel project's Root Directory to the repository root so Vercel can read `vercel.json`.
+- Set `VITE_API_URL=/api` and `VITE_USE_MOCK=false` for the frontend's Production environment.
+- Configure backend variables in Vercel: `DATABASE_URL` (the Neon connection string), strong unique `JWT_SECRET` and `JWT_REFRESH_SECRET` values, `CLIENT_URL` (the exact production Vercel origin), `NODE_ENV=production`, and any integration keys such as `GROQ_API_KEY`.
+- Do not set `PORT`; Vercel supplies runtime configuration.
+- The frontend makes browser requests through the public `/api/*` rewrite, so no service binding is needed. The backend calls Neon and other external services directly.
+- The backend currently validates request origins against the exact `CLIENT_URL`; preview deployments need their origin explicitly supported before mutating API requests will work there.
 - Use private, environment-specific credentials. Never commit secrets, paste production credentials into documentation, or reuse credentials from older setup notes.
 - Restrict database access to the application and authorized operators. Back up the database before schema changes.
+
+To keep the backend on Render instead, deploy `Backend` as a Node.js service and set the frontend's `VITE_API_URL` to the Render API URL ending in `/api`. Set Render's `CLIENT_URL` to the exact Vercel site origin.
 
 ## Database release sequence
 
 1. Review the migration files and back up the target database.
-2. Apply the schema using `cd Backend` and `npm run db:migrate`.
+2. Apply the schema using `cd Backend` and `npm run db:migrate` with `DATABASE_URL` pointing to the target Neon database.
 3. If authentic source data is ready, run `npm run import:data` from `Backend`; the importer reads CSVs from `Backend/data/import` and does not fabricate records or truncate tables.
 4. Verify table counts, date ranges, data sources, and the admin analytics pages before enabling the release.
 
