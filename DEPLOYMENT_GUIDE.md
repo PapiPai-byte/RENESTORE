@@ -1,6 +1,9 @@
 # ReneStore deployment notes
 
-The repository can deploy as one Vercel project with separate `backend` and `frontend` services. The root `vercel.json` routes `/api/*` to Express and all other paths to the Vite SPA.
+The repository supports two deployment layouts:
+
+- A single Vercel project with `backend` and `frontend` services, configured by the root `vercel.json`.
+- A separate Vercel frontend and Render backend. Set Vercel's Root Directory to `Frontend`; `Frontend/vercel.json` provides the SPA fallback so refreshing client-side routes serves `index.html`.
 
 ## Vercel Services
 
@@ -13,7 +16,7 @@ The repository can deploy as one Vercel project with separate `backend` and `fro
 - Use private, environment-specific credentials. Never commit secrets, paste production credentials into documentation, or reuse credentials from older setup notes.
 - Restrict database access to the application and authorized operators. Back up the database before schema changes.
 
-To keep the backend on Render instead, deploy `Backend` as a Node.js service and set the frontend's `VITE_API_URL` to the Render API URL ending in `/api`. Set Render's `CLIENT_URL` to the exact Vercel site origin.
+For the separate Render backend layout, set the frontend's `VITE_API_URL` to the full Render API URL ending in `/api`, such as `https://your-service.onrender.com/api`; do not use `/api` alone. Set Render's `CLIENT_URL` to the exact Vercel site origin.
 
 ## Database release sequence
 
