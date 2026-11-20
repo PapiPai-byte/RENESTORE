@@ -15,6 +15,9 @@ export const formatCompactCurrency = (value: number) =>
 export const cn = (...classes: (string | false | null | undefined)[]) =>
   classes.filter(Boolean).join(' ');
 
+export const pluralize = (count: number, singular: string, plural?: string) =>
+  `${count} ${count === 1 ? singular : (plural || singular + 's')}`;
+
 export const tokenStorage = {
   getAccessToken: () => localStorage.getItem('accessToken'),
   setAccessToken: (token: string) => localStorage.setItem('accessToken', token),

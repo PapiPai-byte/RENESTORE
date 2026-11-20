@@ -97,15 +97,15 @@ export default function PredictiveTab() {
         <div className="flex items-center gap-2 mb-2">
           <span className="text-white font-semibold text-xs">{label}</span>
           {isForecastMonth ? (
-            <span className="bg-sky-500/20 text-sky-300 text-[10px] px-2 py-0.5 rounded-full border border-sky-500/30 font-medium">
+            <span className="bg-sky-500/20 text-sky-300 text-xs px-2 py-0.5 rounded-full border border-sky-500/30 font-medium">
               Forecast Projection
             </span>
           ) : partialMonth ? (
-            <span className="bg-amber-500/20 text-amber-200 text-[10px] px-2 py-0.5 rounded-full border border-amber-400/40 font-medium">
+            <span className="bg-amber-500/20 text-amber-200 text-xs px-2 py-0.5 rounded-full border border-amber-400/40 font-medium">
               Partial month
             </span>
           ) : (
-            <span className="bg-white/10 text-white/80 text-[10px] px-2 py-0.5 rounded-full border border-white/20 font-medium">
+            <span className="bg-white/10 text-white/80 text-xs px-2 py-0.5 rounded-full border border-white/20 font-medium">
               Historical data
             </span>
           )}
@@ -174,7 +174,7 @@ export default function PredictiveTab() {
               <button
                 onClick={() => setModelView('both')}
                 className={`px-3 py-1.5 font-medium rounded-lg transition-colors ${
-                  modelView === 'both' ? 'bg-bright text-abyss font-bold' : 'text-white/60 hover:text-white'
+                  modelView === 'both' ? 'bg-bright text-abyss font-bold' : 'text-white/75 hover:text-white'
                 }`}
               >
                 Both Models
@@ -182,7 +182,7 @@ export default function PredictiveTab() {
               <button
                 onClick={() => setModelView('lr')}
                 className={`px-3 py-1.5 font-medium rounded-lg transition-colors ${
-                  modelView === 'lr' ? 'bg-bright text-abyss font-bold' : 'text-white/60 hover:text-white'
+                  modelView === 'lr' ? 'bg-bright text-abyss font-bold' : 'text-white/75 hover:text-white'
                 }`}
               >
                 Regression Only
@@ -190,7 +190,7 @@ export default function PredictiveTab() {
               <button
                 onClick={() => setModelView('ma')}
                 className={`px-3 py-1.5 font-medium rounded-lg transition-colors ${
-                  modelView === 'ma' ? 'bg-amber-400 text-abyss font-bold' : 'text-white/60 hover:text-white'
+                  modelView === 'ma' ? 'bg-amber-400 text-abyss font-bold' : 'text-white/75 hover:text-white'
                 }`}
               >
                 Moving Avg Only
@@ -204,7 +204,7 @@ export default function PredictiveTab() {
                   key={m}
                   onClick={() => setMonthsAhead(m)}
                   className={`px-3 py-1.5 font-medium rounded-lg transition-colors ${
-                    monthsAhead === m ? 'bg-white/20 text-white font-bold shadow' : 'text-white/60 hover:text-white'
+                    monthsAhead === m ? 'bg-white/20 text-white font-bold shadow' : 'text-white/75 hover:text-white'
                   }`}
                 >
                   +{m} Mo
@@ -220,8 +220,11 @@ export default function PredictiveTab() {
         <div className="flex items-start justify-between mb-2">
           <div>
             <h3 className="text-base font-bold text-white">Revenue Projection Horizon (+{monthsAhead} Months)</h3>
-            <p className="text-xs text-white/60 mt-0.5">
+            <p className="text-xs text-white/75 mt-0.5">
               Solid line: Historical actuals | Dashed lines: Out-of-sample forward forecast projections
+            </p>
+            <p className="text-xs text-white/70 mt-1">
+              Average monthly forecast: {data?.forecastMonthlyRevenue ? formatCurrency(data.forecastMonthlyRevenue) : 'Insufficient data'}
             </p>
           </div>
           <div className="text-right">
@@ -280,7 +283,7 @@ export default function PredictiveTab() {
                   type="monotoneX"
                   dataKey="lrFitted"
                   name="Regression Trendline"
-                  stroke="#38BDF8"
+                  stroke="#94A3B8"
                   strokeWidth={1.5}
                   strokeDasharray="3 3"
                   dot={false}
@@ -332,11 +335,11 @@ export default function PredictiveTab() {
         {/* Regression Equation & Slope */}
         <Card>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider text-white/50">Regression Equation</span>
+            <span className="text-xs uppercase tracking-wider text-white/65">Regression Equation</span>
             <span className="text-xs bg-sky-500/15 text-sky-300 px-2 py-0.5 rounded font-mono">OLS</span>
           </div>
           <p className="text-xl font-bold text-white font-mono my-2">{models.linearRegression.equation}</p>
-          <p className="text-xs text-white/60">
+          <p className="text-xs text-white/75">
             Monthly trend: <strong className="text-bright">{models.linearRegression.slope >= 0 ? '+' : ''}₱{models.linearRegression.slope.toLocaleString()}</strong> per month
           </p>
         </Card>
@@ -344,7 +347,7 @@ export default function PredictiveTab() {
         {/* R-Squared Score with Plain Language Interpretation */}
         <Card>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider text-white/50">Coefficient of Determination (R²)</span>
+            <span className="text-xs uppercase tracking-wider text-white/65">Coefficient of Determination (R²)</span>
             <span className="text-xs bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">
               R² = {models.linearRegression.rSquared.toFixed(2)}
             </span>
@@ -368,7 +371,7 @@ export default function PredictiveTab() {
         {/* Model Recommendation & RMSE comparison */}
         <Card>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs uppercase tracking-wider text-white/50">Model Accuracy (RMSE)</span>
+            <span className="text-xs uppercase tracking-wider text-white/65">Model Accuracy (RMSE)</span>
             <span className="text-xs bg-bright/20 text-bright px-2 py-0.5 rounded font-semibold">
               Fit Comparison
             </span>
@@ -392,7 +395,7 @@ export default function PredictiveTab() {
       {/* 4. Channel ROI Prediction (Real data, no Math.random) */}
       <Card>
         <h3 className="text-base font-bold text-white mb-1">Marketing Channel ROI Predictions</h3>
-        <p className="text-xs text-white/60 mb-4">
+        <p className="text-xs text-white/75 mb-4">
           Predicted ROI is the average ROI of each channel's most recent observed campaign months.
         </p>
 
@@ -401,15 +404,15 @@ export default function PredictiveTab() {
             <div key={ch.channel} className="glass-subtle p-3.5 rounded-xl border border-white/10 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="font-semibold text-white text-xs">{ch.channel}</span>
-                <span className="text-[10px] text-sky-200 bg-sky-500/20 px-1.5 py-0.5 rounded font-mono">
+                <span className="text-xs text-sky-200 bg-sky-500/20 px-1.5 py-0.5 rounded font-mono">
                   {ch.observations} months
                 </span>
               </div>
               <div>
-                <p className="text-xs text-white/50">Predicted ROI</p>
+                <p className="text-xs text-white/65">Predicted ROI</p>
                 <p className="text-2xl font-bold text-bright tabular-nums">{ch.predictedRoi}%</p>
               </div>
-              <div className="pt-2 border-t border-white/5 flex justify-between text-[11px] text-white/60">
+              <div className="pt-2 border-t border-white/5 flex justify-between text-sm text-white/75">
                 <span>Hist. Avg: {ch.historicalRoi}%</span>
                 <span className={ch.trend === 'increasing' ? 'text-emerald-400' : 'text-amber-400'}>
                   {ch.trend === 'increasing' ? '↑ Increasing' : ch.trend === 'diminishing' ? '↓ Decreasing' : '→ Stable'}
@@ -430,7 +433,7 @@ export default function PredictiveTab() {
                 Demand vs Stock vs Lead Time
               </span>
             </h3>
-            <p className="text-xs text-white/60">
+            <p className="text-xs text-white/75">
               Evaluates inventory levels against forecast monthly demand and supplier delivery lead times
             </p>
           </div>
@@ -443,7 +446,7 @@ export default function PredictiveTab() {
                   key={lvl}
                   onClick={() => setStockRiskFilter(lvl)}
                   className={`px-2.5 py-1 font-medium transition-colors ${
-                    stockRiskFilter === lvl ? 'bg-white/20 text-white font-bold' : 'text-white/60 hover:text-white'
+                    stockRiskFilter === lvl ? 'bg-white/20 text-white font-bold' : 'text-white/75 hover:text-white'
                   }`}
                 >
                   {lvl === 'all' ? 'All' : `${lvl} Risk`}
@@ -466,7 +469,7 @@ export default function PredictiveTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
-              <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+              <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                 <th className="py-2.5 px-3">Product</th>
                 <th className="py-2.5 px-3">Category</th>
                 <th className="py-2.5 px-3 text-right">Current Stock</th>
@@ -488,19 +491,19 @@ export default function PredictiveTab() {
                     : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
 
                 return (
-                  <tr key={item.productId} className="hover:bg-white/5 transition-colors">
+                  <tr key={item.productId} className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                     <td className="py-2.5 px-3 font-medium text-white">{item.name}</td>
                     <td className="py-2.5 px-3 text-white/70">{item.category}</td>
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-white tabular-nums">{item.currentStock}</td>
-                    <td className="py-2.5 px-3 text-right font-mono text-white/60 tabular-nums">{item.reorderLevel}</td>
+                    <td className="py-2.5 px-3 text-right font-mono text-white/75 tabular-nums">{item.reorderLevel}</td>
                     <td className="py-2.5 px-3 text-right font-mono text-white/80 tabular-nums">{item.monthlyDemand}/mo</td>
                     <td className="py-2.5 px-3 text-right font-mono text-white/80 tabular-nums">                    {item.daysOfInventory === null ? '—' : `${item.daysOfInventory} days`}</td>
                     <td className="py-2.5 px-3 text-white/70">
                       <span className="truncate block max-w-[140px]" title={item.supplier}>{item.supplier}</span>
-                      <span className="text-[10px] text-white/40">({item.leadTimeDays}d lead time)</span>
+                      <span className="text-xs text-white/75">({item.leadTimeDays}d lead time)</span>
                     </td>
                     <td className="py-2.5 px-3 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${riskBadge}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${riskBadge}`}>
                         {item.riskLevel}
                       </span>
                     </td>
@@ -516,9 +519,9 @@ export default function PredictiveTab() {
       </Card>
 
       {/* 6. Data Confidence & Methodology Note */}
-      <div className="glass-subtle p-4 rounded-xl border border-white/10 text-xs text-white/60 flex items-center justify-between">
+      <div className="glass-subtle p-4 rounded-xl border border-white/10 text-xs text-white/75 flex items-center justify-between">
         <span>Statistical Notice: {dataConfidenceNote}</span>
-        <span className="font-mono text-white/60">Computed from currently available database rows</span>
+        <span className="font-mono text-white/75">Computed from currently available database rows</span>
       </div>
     </div>
   );

@@ -12,6 +12,13 @@ import {
 } from 'recharts';
 
 const chartColors = ['#0C969C', '#6BA3BE', '#E3A008', '#10B981', '#274D60'];
+const channelColors: Record<string, string> = {
+  'Facebook': '#3B82F6',
+  'Google Ads': '#F97316',
+  'Email': '#10B981',
+  'TikTok': '#A855F7',
+  'Instagram': '#EC4899',
+};
 const defaultBudget = 100000;
 const defaultPurchaseBudget = 250000;
 const defaultMin: Record<string, number> = { 'Facebook': 5000, 'Google Ads': 5000, 'Email': 2000, 'TikTok': 3000, 'Instagram': 3000 };
@@ -26,6 +33,7 @@ export default function PrescriptiveTab() {
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showConstraints, setShowConstraints] = useState(false);
 
   // Run initial optimization on mount
   useEffect(() => {
@@ -80,11 +88,17 @@ export default function PrescriptiveTab() {
   };
 
   const allocations = result?.allocations || [];
+  const sumMin = Object.values(minPerChannel).reduce((a: number, b: any) => a + Number(b || 0), 0);
+  const sumMax = Object.values(maxPerChannel).reduce((a: number, b: any) => a + Number(b || 0), 0);
+  const hasInvalidBounds = channels.some((ch) => Number(minPerChannel[ch]) > Number(maxPerChannel[ch]));
+  const infeasible = !Number.isFinite(totalBudget) || totalBudget <= 0 || totalBudget < sumMin || totalBudget > sumMax || hasInvalidBounds;
 
   // Before vs After comparison dataset
+  const historicalMix = result?.historicalMixAllocation || {};
   const comparisonData = allocations.map((a: any) => ({
     channel: a.channel,
-    historicalSpend: a.historicalSpend,
+    historicalSpend: historicalMix[a.channel] ?? a.historicalSpend,
+    originalHistoricalSpend: a.historicalSpend,
     recommendedSpend: a.budget,
   }));
 
@@ -152,14 +166,14 @@ export default function PrescriptiveTab() {
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               Prescriptive Marketing Budget Optimization
               <span className="bg-bright/20 text-bright text-xs px-2.5 py-0.5 rounded-full border border-bright/30">
-                Marginal ROI / LP Solver
+                ROI-based Optimizer
               </span>
             </h3>
-            <p className="text-xs text-white/60">
+            <p className="text-xs text-white/75">
               Uses campaign-derived ROI estimates and the selected constraints to compare budget allocations.
             </p>
           </div>
-          <span className="text-xs text-white/50 font-mono">Linear programming (campaign ROI)</span>
+          <span className="text-xs text-white/65 font-mono">Model: {result?.model || 'power-law'} (P1,000 steps)</span>
         </div>
 
         {/* Total Budget Slider + Input */}
@@ -170,28 +184,36 @@ export default function PrescriptiveTab() {
           </div>
           <input
             type="range"
-            min={20000}
-            max={300000}
-            step={5000}
-            value={totalBudget}
+            min={sumMin || 0}
+            max={sumMax || 1}
+            step={1000}
+            value={Math.min(Math.max(totalBudget, sumMin || 0), sumMax || 1)}
             onChange={(e) => setTotalBudget(Number(e.target.value))}
             className="w-full h-2 rounded-full appearance-none cursor-pointer accent-bright bg-white/10"
           />
-          <div className="flex justify-between text-[11px] text-white/40 mt-1">
-            <span>₱20,000 (Min)</span>
-            <span>Current budget</span>
-            <span>₱300,000 (Max)</span>
+          <div className="flex justify-between text-sm text-white/75 mt-1">
+            <span>{formatCurrency(sumMin)} (Min)</span>
+            <span>Current budget: {formatCurrency(result?.historicalAverageMonthlySpend ?? 100000)}</span>
+            <span>{formatCurrency(sumMax)} (Max)</span>
           </div>
         </div>
 
-        {/* Per-Channel Min/Max Constraints */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+        {/* Per-Channel Min/Max Constraints (collapsible) */}
+        <button
+          type="button"
+          onClick={() => setShowConstraints((v) => !v)}
+          className="text-xs text-white/75 hover:text-white mb-2 flex items-center gap-1"
+        >
+          {showConstraints ? '▼' : '▶'} Advanced channel constraints
+        </button>
+        {showConstraints && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
           {channels.map((channel) => (
             <div key={channel} className="glass-subtle rounded-xl p-3 space-y-2 border border-white/10">
               <span className="font-semibold text-white text-xs block">{channel}</span>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <label className="text-[10px] text-white/40 uppercase block mb-1">Min (₱)</label>
+                  <label className="text-xs text-white/75 uppercase block mb-1">Min (₱)</label>
                   <input
                     type="number"
                     value={minPerChannel[channel]}
@@ -200,7 +222,7 @@ export default function PrescriptiveTab() {
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-white/40 uppercase block mb-1">Max (₱)</label>
+                  <label className="text-xs text-white/75 uppercase block mb-1">Max (₱)</label>
                   <input
                     type="number"
                     value={maxPerChannel[channel]}
@@ -212,8 +234,12 @@ export default function PrescriptiveTab() {
             </div>
           ))}
         </div>
+        )}
 
-        <Button variant="primary" className="w-full py-2.5 text-sm font-bold shadow-glow" onClick={handleOptimize} disabled={loading}>
+        {infeasible && (
+          <p className="text-xs text-amber-300 mb-3">Warning: current budget is outside the feasible range (sum of mins/maxs). Adjust bounds or budget.</p>
+        )}
+        <Button variant="primary" className="w-full py-2.5 text-sm font-bold shadow-glow" onClick={handleOptimize} disabled={loading || infeasible}>
           {loading ? <Loader /> : 'Optimize Budget & Generate Prescriptive Plan'}
         </Button>
 
@@ -227,7 +253,7 @@ export default function PrescriptiveTab() {
             {/* Before vs After Bar Chart */}
             <Card>
               <h3 className="text-base font-bold text-white mb-1">Before vs. After Allocation Comparison</h3>
-              <p className="text-xs text-white/60 mb-3">Historical spend mix vs. prescribed optimal allocation</p>
+              <p className="text-xs text-white/75 mb-3">Historical spend mix vs. prescribed optimal allocation</p>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={comparisonData}>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} vertical={false} />
@@ -235,7 +261,13 @@ export default function PrescriptiveTab() {
                   <YAxis stroke={axisColor} tick={{ fill: axisColor, fontSize: 11 }} tickFormatter={(v) => formatCompactCurrency(v)} width={64} tickLine={false} axisLine={false} />
                   <Tooltip
                     contentStyle={commonTooltipStyle}
-                    formatter={(v: number) => formatCurrency(v)}
+                    formatter={(v: number, name: string, props: any) => {
+                      if (name === 'Historical Average') {
+                        const orig = props?.payload?.originalHistoricalSpend;
+                        return [`${formatCurrency(v)} (scaled; original avg ${formatCurrency(orig)})`, name];
+                      }
+                      return [formatCurrency(v), name];
+                    }}
                   />
                   <Legend wrapperStyle={{ paddingTop: 8 }} formatter={(v) => <span className="text-white/80 text-xs">{v}</span>} />
                   <Bar dataKey="historicalSpend" name="Historical Average" fill="#6BA3BE" radius={[4, 4, 0, 0]} maxBarSize={36} />
@@ -247,7 +279,7 @@ export default function PrescriptiveTab() {
             {/* Prescribed Budget Share Donut */}
             <Card>
               <h3 className="text-base font-bold text-white mb-1">Prescribed Spend Distribution</h3>
-              <p className="text-xs text-white/60 mb-3">Share of capital allocated per channel</p>
+              <p className="text-xs text-white/75 mb-3">Share of capital allocated per channel</p>
               <div className="flex items-center justify-center">
                 <ResponsiveContainer width="100%" height={260}>
                   <PieChart>
@@ -260,8 +292,8 @@ export default function PrescriptiveTab() {
                       paddingAngle={3}
                       dataKey="value"
                     >
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={chartColors[i % chartColors.length]} />
+                      {pieData.map((entry: any, i: number) => (
+                        <Cell key={i} fill={channelColors[entry.name] || chartColors[i % chartColors.length]} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={commonTooltipStyle} formatter={(v: number) => formatCurrency(v)} />
@@ -277,7 +309,7 @@ export default function PrescriptiveTab() {
             {/* Written Action List */}
             <Card className="lg:col-span-2">
               <h3 className="text-base font-bold text-white mb-1">Prescribed Action Plan</h3>
-              <p className="text-xs text-white/60 mb-4">Concrete tactical reallocations based on elasticity and ROI</p>
+              <p className="text-xs text-white/75 mb-4">Concrete tactical reallocations based on channel ROI (constant ROI per channel; elasticity not estimated from data)</p>
               <div className="space-y-3">
                 {result.actionList?.map((action: any, idx: number) => {
                   const icon = action.type === 'increase' ? '↑' : action.type === 'decrease' ? '↓' : '→';
@@ -295,7 +327,7 @@ export default function PrescriptiveTab() {
                       </span>
                       <div className="flex-1">
                         <p className="text-xs font-bold text-white">{action.actionText}</p>
-                        <p className="text-[11px] text-white/65 mt-0.5">{action.rationale}</p>
+                        <p className="text-sm text-white/65 mt-0.5">{action.rationale}</p>
                       </div>
                     </div>
                   );
@@ -306,14 +338,20 @@ export default function PrescriptiveTab() {
             {/* Baseline Uplift & Key Metrics */}
             <Card>
               <h3 className="text-base font-bold text-white mb-1">Expected Financial Impact</h3>
-              <p className="text-xs text-white/60 mb-4">Optimized plan vs alternative baselines</p>
+              <p className="text-xs text-white/75 mb-4">Optimized plan vs alternative baselines</p>
               <div className="space-y-3">
                 <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 glass-subtle">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold">Total Expected Revenue</p>
+                  <p className="text-xs uppercase tracking-wider text-emerald-300/80 font-semibold">Total Expected Revenue</p>
                   <p className="text-2xl font-bold text-emerald-300 tabular-nums">{formatCurrency(result.totalExpectedRevenue)}</p>
                   <p className="text-xs text-white/70 mt-1">
                     Overall Expected ROI: <strong className="text-emerald-300">{result.overallROI}%</strong>
                   </p>
+                  {result.totalExpectedRevenueUncapped != null && result.totalExpectedRevenueUncapped !== result.totalExpectedRevenue && (
+                    <p className="text-xs text-white/65 mt-1">
+                      Uncapped model estimate: {formatCurrency(result.totalExpectedRevenueUncapped)} (capped at {formatCurrency(result.revenueCap)} = 30% of forecast)
+                    </p>
+                  )}
+                  <p className="text-xs text-white/65 mt-2">Attributed revenue estimated from historical campaign data; not a guaranteed result.</p>
                 </div>
 
                 {result.baselines?.map((bl: any, i: number) => (
@@ -322,8 +360,8 @@ export default function PrescriptiveTab() {
                       <span>{bl.name}:</span>
                       <span className="font-semibold text-white">{formatCurrency(bl.expectedRevenue)}</span>
                     </div>
-                    <div className="flex justify-between mt-1 text-[11px]">
-                      <span className="text-white/50">Prescribed Plan Uplift:</span>
+                    <div className="flex justify-between mt-1 text-sm">
+                      <span className="text-white/65">Prescribed Plan Uplift:</span>
                       <span className={bl.upliftPct >= 0 ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
                         {bl.upliftPct >= 0 ? '+' : ''}{bl.upliftPct}%
                       </span>
@@ -339,7 +377,7 @@ export default function PrescriptiveTab() {
             <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
               <div>
                 <h3 className="text-base font-bold text-white mb-1">Optimized Allocation Details</h3>
-                <p className="text-xs text-white/60">Channel level spend, share %, estimated returns, and bound status</p>
+                <p className="text-xs text-white/75">Channel level spend, share %, estimated returns, and bound status</p>
               </div>
               <button onClick={exportAllocationsToCsv} className="glass px-3 py-1.5 rounded-lg text-xs font-medium text-white/80 hover:text-white border border-white/15">
                 Export CSV
@@ -348,7 +386,7 @@ export default function PrescriptiveTab() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+                  <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                     <th className="py-2.5 px-3">Channel</th>
                     <th className="py-2.5 px-3 text-right">Prescribed Budget</th>
                     <th className="py-2.5 px-3 text-right">Budget Share</th>
@@ -360,7 +398,7 @@ export default function PrescriptiveTab() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {allocations.map((a: any) => (
-                    <tr key={a.channel} className="hover:bg-white/5 transition-colors">
+                    <tr key={a.channel} className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                       <td className="py-2.5 px-3 font-semibold text-white">{a.channel}</td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-bright tabular-nums">{formatCurrency(a.budget)}</td>
                       <td className="py-2.5 px-3 text-right font-mono text-white/80 tabular-nums">{a.sharePct}%</td>
@@ -369,13 +407,13 @@ export default function PrescriptiveTab() {
                       <td className="py-2.5 px-3 text-right font-mono text-white/70 tabular-nums">{a.roas}x</td>
                       <td className="py-2.5 px-3 text-center">
                         {a.boundHit ? (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            a.boundHit === 'MAX' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-white/60'
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                            a.boundHit === 'MAX' ? 'bg-amber-500/20 text-amber-300' : 'bg-white/10 text-white/75'
                           }`}>
                             {a.boundHit} Limit
                           </span>
                         ) : (
-                          <span className="text-emerald-400 text-[10px]">Optimal Interior</span>
+                          <span className="text-emerald-400 text-xs">Optimal Interior</span>
                         )}
                       </td>
                     </tr>
@@ -396,7 +434,7 @@ export default function PrescriptiveTab() {
                       ROP & EOQ Model
                     </span>
                   </h3>
-                  <p className="text-xs text-white/60">
+                  <p className="text-xs text-white/75">
                     Allocates inventory purchase budget to highest-priority items based on Economic Order Quantity (EOQ) and Reorder Points (ROP)
                   </p>
                 </div>
@@ -421,7 +459,7 @@ export default function PrescriptiveTab() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
                   <thead>
-                    <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+                    <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                       <th className="py-2.5 px-3">Product Name</th>
                       <th className="py-2.5 px-3">Category</th>
                       <th className="py-2.5 px-3">Preferred Supplier</th>
@@ -443,14 +481,14 @@ export default function PrescriptiveTab() {
                           : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
 
                       return (
-                        <tr key={item.productId} className="hover:bg-white/5 transition-colors">
+                        <tr key={item.productId} className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                           <td className="py-2.5 px-3 font-medium text-white">{item.productName}</td>
                           <td className="py-2.5 px-3 text-white/70">{item.category}</td>
                           <td className="py-2.5 px-3 text-white/70">
                             <span className="truncate block max-w-[140px]" title={item.supplier}>{item.supplier}</span>
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-white tabular-nums">{item.currentStock}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-white/60 tabular-nums">{item.reorderPoint}</td>
+                          <td className="py-2.5 px-3 text-right font-mono text-white/75 tabular-nums">{item.reorderPoint}</td>
                           <td className="py-2.5 px-3 text-right font-mono text-white/70 tabular-nums">{item.economicOrderQty}</td>
                           <td className="py-2.5 px-3 text-right font-mono font-bold text-bright tabular-nums">
                             {item.recommendedOrderQty > 0 ? `${item.recommendedOrderQty} units` : '—'}
@@ -459,7 +497,7 @@ export default function PrescriptiveTab() {
                             {item.totalCost > 0 ? formatCurrency(item.totalCost) : '—'}
                           </td>
                           <td className="py-2.5 px-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${prioClass}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${prioClass}`}>
                               {item.priority}
                             </span>
                           </td>

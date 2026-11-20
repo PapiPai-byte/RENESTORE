@@ -90,7 +90,7 @@ export default function DescriptiveTab() {
     return (
       <div style={commonTooltipStyle} className="p-3">
         <p className="text-white/80 text-xs font-semibold mb-1.5">{label}</p>
-        {partial && <p className="text-amber-200 text-[10px] mb-1.5">Partial month; excluded from model fitting</p>}
+        {partial && <p className="text-amber-200 text-xs mb-1.5">Partial month; excluded from model fitting</p>}
         {payload.map((entry: any, i: number) => (
           <div key={i} className="flex items-center gap-2 text-xs py-0.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: entry.color || '#0C969C' }} />
@@ -148,23 +148,23 @@ export default function DescriptiveTab() {
           </label>
           <label className="text-xs text-white/70">
             Category
-            <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white">
-              <option value="all">All categories</option>
-              {salesByCategory.map((row: any) => <option key={row.category} value={row.category}>{row.category}</option>)}
+            <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white bg-slate-800">
+              <option value="all" className="text-white bg-slate-800">All categories</option>
+              {(salesByCategory?.length ? salesByCategory : [{category:'Tools'},{category:'Accessories'},{category:'Computers'},{category:'Laptops'}]).map((row: any) => <option key={row.category} value={row.category} className="text-white bg-slate-800">{row.category}</option>)}
             </select>
           </label>
           <label className="text-xs text-white/70">
             Channel
-            <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)} className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white">
-              <option value="all">All channels</option>
-              {campaignPerformance.map((row: any) => <option key={row.channel} value={row.channel}>{row.channel}</option>)}
+            <select value={channelFilter} onChange={(event) => setChannelFilter(event.target.value)} className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white bg-slate-800">
+              <option value="all" className="text-white bg-slate-800">All channels</option>
+              {(campaignPerformance?.length ? campaignPerformance : [{channel:'Facebook'},{channel:'Google Ads'},{channel:'Email'},{channel:'TikTok'},{channel:'Instagram'}]).map((row: any) => <option key={row.channel} value={row.channel} className="text-white bg-slate-800">{row.channel}</option>)}
             </select>
           </label>
           <label className="text-xs text-white/70">
             City
-            <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white">
-              <option value="all">All cities</option>
-              {salesByCity.map((row: any) => <option key={row.city} value={row.city}>{row.city}</option>)}
+            <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="glass-input mt-1 w-full px-3 py-2 rounded-lg text-white bg-slate-800">
+              <option value="all" className="text-white bg-slate-800">All cities</option>
+              {(salesByCity?.length ? salesByCity : []).map((row: any) => <option key={row.city} value={row.city} className="text-white bg-slate-800">{row.city}</option>)}
             </select>
           </label>
         </div>
@@ -176,7 +176,7 @@ export default function DescriptiveTab() {
           <div>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               Monthly Revenue & Gross Profit
-              <span className="text-xs font-normal text-white/50">({filteredSalesByMonth.length} months shown)</span>
+              <span className="text-xs font-normal text-white/65">({filteredSalesByMonth.length} months shown)</span>
             </h3>
             <p className="text-xs text-white/65 mt-0.5">Historical revenue and gross margin trends from completed customer orders</p>
           </div>
@@ -223,7 +223,7 @@ export default function DescriptiveTab() {
               wrapperStyle={{ paddingTop: 8 }}
               formatter={(val) => <span className="text-white/80 text-xs font-medium">{val}</span>}
             />
-            <Area type="monotoneX" dataKey="revenue" stroke="none" fill="url(#revGrad)" />
+            <Area type="monotoneX" dataKey="revenue" stroke="none" fill="url(#revGrad)" legendType="none" />
             <Line
               type="monotoneX"
               dataKey="revenue"
@@ -243,7 +243,7 @@ export default function DescriptiveTab() {
             />
           </LineChart>
         </ResponsiveContainer>
-        ) : <p className="py-24 text-center text-sm text-white/60">No monthly sales match this date range.</p>}
+        ) : <p className="py-24 text-center text-sm text-white/75">No monthly sales match this date range.</p>}
       </Card>
 
       {/* 2. Revenue by Category & Revenue by City */}
@@ -253,7 +253,7 @@ export default function DescriptiveTab() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-base font-bold text-white">Revenue by Category</h3>
-              <p className="text-xs text-white/60">Total revenue across product categories</p>
+              <p className="text-xs text-white/75">Total revenue across product categories</p>
             </div>
           </div>
           {filteredSalesByCategory.length > 0 ? <ResponsiveContainer width="100%" height={260}>
@@ -264,7 +264,7 @@ export default function DescriptiveTab() {
               <Tooltip content={({ active, payload, label }) => renderTooltip(active, payload, label)} />
               <Bar dataKey="revenue" name="Revenue" fill="#0C969C" radius={[6, 6, 0, 0]} maxBarSize={48} />
             </BarChart>
-          </ResponsiveContainer> : <p className="py-24 text-center text-sm text-white/60">No category sales match this filter.</p>}
+          </ResponsiveContainer> : <p className="py-24 text-center text-sm text-white/75">No category sales match this filter.</p>}
         </Card>
 
         {/* City Breakdown */}
@@ -272,7 +272,7 @@ export default function DescriptiveTab() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-base font-bold text-white">Revenue by Customer City</h3>
-              <p className="text-xs text-white/60">Geographic customer demand</p>
+              <p className="text-xs text-white/75">Geographic customer demand</p>
             </div>
           </div>
           {filteredSalesByCity.length > 0 ? <ResponsiveContainer width="100%" height={260}>
@@ -283,7 +283,7 @@ export default function DescriptiveTab() {
               <Tooltip content={({ active, payload, label }) => renderTooltip(active, payload, label)} />
               <Bar dataKey="revenue" name="Revenue" fill="#6BA3BE" radius={[0, 6, 6, 0]} maxBarSize={28} />
             </BarChart>
-          </ResponsiveContainer> : <p className="py-24 text-center text-sm text-white/60">No city sales match this filter.</p>}
+          </ResponsiveContainer> : <p className="py-24 text-center text-sm text-white/75">No city sales match this filter.</p>}
         </Card>
       </div>
 
@@ -292,14 +292,14 @@ export default function DescriptiveTab() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div>
             <h3 className="text-base font-bold text-white">Product Performance</h3>
-            <p className="text-xs text-white/60">Top performers and slow-moving inventory</p>
+            <p className="text-xs text-white/75">Top performers and slow-moving inventory</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex rounded-xl overflow-hidden glass p-0.5 border border-white/10">
               <button
                 onClick={() => setProductView('top')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  productView === 'top' ? 'bg-bright text-abyss shadow' : 'text-white/60 hover:text-white'
+                  productView === 'top' ? 'bg-bright text-abyss shadow' : 'text-white/75 hover:text-white'
                 }`}
               >
                 Top 10 Products
@@ -307,7 +307,7 @@ export default function DescriptiveTab() {
               <button
                 onClick={() => setProductView('bottom')}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  productView === 'bottom' ? 'bg-amber-400 text-abyss shadow' : 'text-white/60 hover:text-white'
+                  productView === 'bottom' ? 'bg-amber-400 text-abyss shadow' : 'text-white/75 hover:text-white'
                 }`}
               >
                 Bottom 10 (Slow Moving)
@@ -331,7 +331,7 @@ export default function DescriptiveTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+              <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                 <th className="py-2.5 px-3">Product Name</th>
                 <th className="py-2.5 px-3">Category</th>
                 <th className="py-2.5 px-3 text-right">Units Sold</th>
@@ -341,19 +341,19 @@ export default function DescriptiveTab() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredProducts.length === 0 && (
-                <tr><td colSpan={productView === 'bottom' ? 5 : 4} className="py-8 text-center text-white/60">No products match this filter.</td></tr>
+                <tr><td colSpan={productView === 'bottom' ? 5 : 4} className="py-8 text-center text-white/75">No products match this filter.</td></tr>
               )}
               {filteredProducts.map((prod: any, idx: number) => (
-                <tr key={idx} className="hover:bg-white/5 transition-colors">
+                <tr key={idx} className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                   <td className="py-2.5 px-3 font-medium text-white flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-white/60 font-mono">
+                    <span className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-xs text-white/75 font-mono">
                       {idx + 1}
                     </span>
                     {prod.name}
                   </td>
                   <td className="py-2.5 px-3 text-white/70">{prod.category}</td>
                   <td className="py-2.5 px-3 text-right text-white/80 tabular-nums">{prod.unitsSold}</td>
-                  <td className="py-2.5 px-3 text-right text-bright font-semibold tabular-nums">{formatCurrency(prod.revenue)}</td>
+                  <td className="py-2.5 px-3 text-right text-white font-semibold tabular-nums">{formatCurrency(prod.revenue)}</td>
                   {productView === 'bottom' && (
                     <td className="py-2.5 px-3 text-right text-amber-300 font-semibold tabular-nums">{prod.stock}</td>
                   )}
@@ -369,7 +369,7 @@ export default function DescriptiveTab() {
         {/* Payment Methods */}
         <Card>
           <h3 className="text-base font-bold text-white mb-1">Payment Method Distribution</h3>
-          <p className="text-xs text-white/60 mb-3">Revenue share by payment channel</p>
+          <p className="text-xs text-white/75 mb-3">Revenue share by payment channel</p>
           <div className="flex items-center justify-center">
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -388,7 +388,7 @@ export default function DescriptiveTab() {
                   ))}
                 </Pie>
                 <Tooltip content={({ active, payload, label }) => renderTooltip(active, payload, label)} />
-                <Legend formatter={(v) => <span className="text-white/80 text-xs">{v}</span>} />
+                <Legend formatter={(v, entry: any) => <span className="text-white/80 text-xs">{v} ({entry?.payload?.percentage ?? 0}%)</span>} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -397,7 +397,7 @@ export default function DescriptiveTab() {
         {/* Orders by Status */}
         <Card>
           <h3 className="text-base font-bold text-white mb-1">Orders by Fulfillment Status</h3>
-          <p className="text-xs text-white/60 mb-4">Completed, pending, and cancelled distribution</p>
+          <p className="text-xs text-white/75 mb-4">Completed, pending, and cancelled distribution</p>
           <div className="space-y-3">
             {ordersByStatus.map((s: any, idx: number) => {
               const color = s.status === 'completed' ? 'bg-emerald-400' : s.status === 'pending' ? 'bg-amber-400' : 'bg-red-400';
@@ -424,11 +424,11 @@ export default function DescriptiveTab() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="min-h-[300px]">
           <h3 className="text-base font-bold text-white mb-1">Customers by Segment</h3>
-          <p className="text-xs text-white/60 mb-3">Customer profile counts from the customer table</p>
+          <p className="text-xs text-white/75 mb-3">Customer profile counts from the customer table</p>
           {customersBySegment.length > 0 ? (
             <ResponsiveContainer width="100%" height={230}>
               <PieChart>
-                <Pie data={customersBySegment} dataKey="customers" nameKey="segment" cx="50%" cy="50%" outerRadius={78}>
+                <Pie data={customersBySegment} dataKey="customers" nameKey="segment" cx="50%" cy="50%" outerRadius={78} startAngle={0} endAngle={360} paddingAngle={2}>
                   {customersBySegment.map((_: any, index: number) => (
                     <Cell key={index} fill={paymentColors[index % paymentColors.length]} />
                   ))}
@@ -437,12 +437,12 @@ export default function DescriptiveTab() {
                 <Legend formatter={(value) => <span className="text-white/80 text-xs">{value}</span>} />
               </PieChart>
             </ResponsiveContainer>
-          ) : <p className="py-16 text-center text-sm text-white/60">No customer records available.</p>}
+          ) : <p className="py-16 text-center text-sm text-white/75">No customer records available.</p>}
         </Card>
 
         <Card className="min-h-[300px]">
           <h3 className="text-base font-bold text-white mb-1">Inventory Purchases by Month</h3>
-          <p className="text-xs text-white/60 mb-3">Recorded purchase spend and quantity</p>
+          <p className="text-xs text-white/75 mb-3">Recorded purchase spend and quantity</p>
           {filteredPurchasesByMonth.length > 0 ? (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={filteredPurchasesByMonth}>
@@ -454,7 +454,7 @@ export default function DescriptiveTab() {
                 <Bar dataKey="spend" name="Purchase Spend" fill="#F59E0B" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          ) : <p className="py-16 text-center text-sm text-white/60">No inventory purchase records available.</p>}
+          ) : <p className="py-16 text-center text-sm text-white/75">No inventory purchase records available.</p>}
           <button
             onClick={() => exportToCsv('inventory_purchases_by_month', filteredPurchasesByMonth, ['Month', 'Spend', 'Quantity'], ['month', 'spend', 'quantity'])}
             className="mt-2 text-xs text-bright hover:underline"
@@ -465,18 +465,18 @@ export default function DescriptiveTab() {
 
         <Card className="min-h-[300px]">
           <h3 className="text-base font-bold text-white mb-1">Purchase Spend by Supplier</h3>
-          <p className="text-xs text-white/60 mb-3">Supplier names and values from recorded inventory purchases</p>
+          <p className="text-xs text-white/75 mb-3">Supplier names and values from recorded inventory purchases</p>
           {inventoryPurchasesBySupplier.length > 0 ? (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={inventoryPurchasesBySupplier} layout="vertical" margin={{ left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} horizontal={false} />
                 <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor, fontSize: 10 }} tickFormatter={formatCompactCurrency} />
-                <YAxis type="category" dataKey="supplier" stroke={axisColor} tick={{ fill: axisColor, fontSize: 10 }} width={100} />
+                <YAxis type="category" dataKey="supplier" stroke={axisColor} tick={{ fill: axisColor, fontSize: 9 }} width={140} />
                 <Tooltip content={({ active, payload, label }) => renderTooltip(active, payload, label)} />
                 <Bar dataKey="spend" name="Purchase Spend" fill="#6BA3BE" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          ) : <p className="py-16 text-center text-sm text-white/60">No supplier purchase records available.</p>}
+          ) : <p className="py-16 text-center text-sm text-white/75">No supplier purchase records available.</p>}
           <button
             onClick={() => exportToCsv('inventory_purchases_by_supplier', inventoryPurchasesBySupplier, ['Supplier', 'Records', 'Quantity', 'Spend'], ['supplier', 'records', 'quantity', 'spend'])}
             className="mt-2 text-xs text-bright hover:underline"
@@ -491,7 +491,7 @@ export default function DescriptiveTab() {
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
             <h3 className="text-base font-bold text-white">Marketing Channel Performance</h3>
-            <p className="text-xs text-white/60">Actual CTR, Conversion Rate, Cost per Order, and ROI computed from marketing records</p>
+            <p className="text-xs text-white/75">Actual CTR, Conversion Rate, Cost per Order, and ROI computed from marketing records</p>
           </div>
           <button
             onClick={() => exportToCsv('marketing_performance', filteredCampaignPerformance, ['Channel', 'Spend', 'Impressions', 'Clicks', 'Orders', 'CTR (%)', 'CVR (%)', 'Cost/Order', 'Revenue', 'ROI (%)'], ['channel', 'spend', 'impressions', 'clicks', 'conversions', 'ctr', 'conversionRate', 'costPerOrder', 'revenue', 'roi'])}
@@ -507,7 +507,7 @@ export default function DescriptiveTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
-              <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+              <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                 <th className="py-2.5 px-3">Channel</th>
                 <th className="py-2.5 px-3 text-right">Spend</th>
                 <th className="py-2.5 px-3 text-right">Impressions</th>
@@ -517,15 +517,15 @@ export default function DescriptiveTab() {
                 <th className="py-2.5 px-3 text-right">Conv. Rate</th>
                 <th className="py-2.5 px-3 text-right">Cost/Order</th>
                 <th className="py-2.5 px-3 text-right">Revenue</th>
-                <th className="py-2.5 px-3 text-right">ROI</th>
+                <th className="py-2.5 px-3 text-right" title="Historical ROI = (attributed revenue - spend) / spend over all campaign-months.">Historical ROI ⓘ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {filteredCampaignPerformance.length === 0 && (
-                <tr><td colSpan={10} className="py-8 text-center text-white/60">No campaign records match this filter.</td></tr>
+                <tr><td colSpan={10} className="py-8 text-center text-white/75">No campaign records match this filter.</td></tr>
               )}
               {filteredCampaignPerformance.map((c: any, i: number) => (
-                <tr key={i} className="hover:bg-white/5 transition-colors">
+                <tr key={i} className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                   <td className="py-2.5 px-3 font-semibold text-white">{c.channel}</td>
                   <td className="py-2.5 px-3 text-right text-white/70 tabular-nums">{formatCurrency(c.spend)}</td>
                   <td className="py-2.5 px-3 text-right text-white/70 tabular-nums">{c.impressions.toLocaleString()}</td>
@@ -552,7 +552,7 @@ export default function DescriptiveTab() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="text-base font-bold text-white">Statistical Distribution Analysis</h3>
-            <p className="text-xs text-white/60">Parametric and non-parametric summary measures computed from transaction records</p>
+            <p className="text-xs text-white/75">Parametric and non-parametric summary measures computed from transaction records</p>
           </div>
           <button
             onClick={() => exportToCsv(
@@ -573,7 +573,7 @@ export default function DescriptiveTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
-              <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+              <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                 <th className="py-2.5 px-4">Metric Variable</th>
                 <th className="py-2.5 px-4 text-right">Mean (Average)</th>
                 <th className="py-2.5 px-4 text-right">Median</th>
@@ -583,20 +583,20 @@ export default function DescriptiveTab() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              <tr className="hover:bg-white/5 transition-colors">
+              <tr className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                 <td className="py-3 px-4 font-semibold text-white">Individual Order Value</td>
                 <td className="py-3 px-4 text-right font-mono text-bright">{formatCurrency(statistics?.orderValue?.mean || 0)}</td>
                 <td className="py-3 px-4 text-right font-mono text-white/80">{formatCurrency(statistics?.orderValue?.median || 0)}</td>
                 <td className="py-3 px-4 text-right font-mono text-white/70">{formatCurrency(statistics?.orderValue?.stdDev || 0)}</td>
-                <td className="py-3 px-4 text-right font-mono text-white/60">{formatCurrency(statistics?.orderValue?.min || 0)}</td>
+                <td className="py-3 px-4 text-right font-mono text-white/75">{formatCurrency(statistics?.orderValue?.min || 0)}</td>
                 <td className="py-3 px-4 text-right font-mono text-emerald-300 font-semibold">{formatCurrency(statistics?.orderValue?.max || 0)}</td>
               </tr>
-              <tr className="hover:bg-white/5 transition-colors">
+              <tr className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                 <td className="py-3 px-4 font-semibold text-white">Monthly Store Revenue</td>
                 <td className="py-3 px-4 text-right font-mono text-bright">{formatCurrency(statistics?.monthlyRevenue?.mean || 0)}</td>
                 <td className="py-3 px-4 text-right font-mono text-white/80">{formatCurrency(statistics?.monthlyRevenue?.median || 0)}</td>
                 <td className="py-3 px-4 text-right font-mono text-white/70">{formatCurrency(statistics?.monthlyRevenue?.stdDev || 0)}</td>
-                <td className="py-3 px-4 text-right font-mono text-white/60">{formatCurrency(statistics?.monthlyRevenue?.min || 0)}</td>
+                <td className="py-3 px-4 text-right font-mono text-white/75">{formatCurrency(statistics?.monthlyRevenue?.min || 0)}</td>
                 <td className="py-3 px-4 text-right font-mono text-emerald-300 font-semibold">{formatCurrency(statistics?.monthlyRevenue?.max || 0)}</td>
               </tr>
             </tbody>

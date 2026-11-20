@@ -54,6 +54,11 @@ const analyticsService = {
     return data;
   },
 
+  getDataQuality: async () => {
+    const { data } = await api.get('/analytics/data-quality');
+    return data;
+  },
+
   getProcessFlow: async (totalBudget: number = 100000, purchaseBudget: number = 250000) => {
     const params = new URLSearchParams({ totalBudget: String(totalBudget), purchaseBudget: String(purchaseBudget) });
     const { data } = await api.get(`/analytics/process-flow?${params.toString()}`);
@@ -62,6 +67,16 @@ const analyticsService = {
 
   getCaseStudy: async () => {
     const { data } = await api.get('/analytics/case-study');
+    return data;
+  },
+
+  getDataSources: async () => {
+    const { data } = await api.get('/analytics/data-sources');
+    return data;
+  },
+
+  updateDataSource: async (tableKey: string, source: string) => {
+    const { data } = await api.put(`/analytics/data-sources/${tableKey}`, { source });
     return data;
   },
 };

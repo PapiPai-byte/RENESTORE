@@ -2,30 +2,72 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { db, pool } from '../db';
-import { marketingCampaigns } from '../db/schema';
+import { marketingCampaigns, dataSources } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { asyncHandler } from '../utils/async-handler';
 import { authenticate, authorize } from '../middlewares/auth';
 import { sql } from 'drizzle-orm';
 import descriptiveService from '../services/descriptive-service';
 import predictiveService from '../services/predictive-service';
 import { optimizeBudget, generateInventoryPlan } from '../services/prescriptive-service';
+import { getChannelRoi } from '../services/channel-roi';
+import { ATTRIBUTION_SHARE } from '../services/store-forecast';
 import type { MarketingRow } from '../services/prescriptive-service';
 
 const router = Router();
 
+const DEFAULT_DATA_SOURCES: Record<string, string> = {
+  products: 'Store product catalog (system-generated)',
+  customers: 'Store customer records (system-generated)',
+  orders: 'Store transaction records (system-generated)',
+  order_items: 'Store order line items (system-generated)',
+  transactions: 'Store payment records (system-generated)',
+  marketing_campaigns: 'Store marketing campaign records (system-generated)',
+  marketing_performance: 'Store marketing performance records (system-generated)',
+  inventory_purchases: 'Store inventory purchase records (system-generated)',
+  suppliers: 'Store supplier records (system-generated)',
+  users: 'Store user accounts (system-generated)',
+  refresh_tokens: 'Store refresh token records (system-generated)',
+  faqs: 'Store FAQ records (system-generated)',
+  chat_logs: 'Store chat log records (system-generated)',
+};
+
+async function ensureDataSources() {
+  const existing = await db.select().from(dataSources);
+  const existingKeys = new Set(existing.map(r => r.tableKey));
+  for (const [key, source] of Object.entries(DEFAULT_DATA_SOURCES)) {
+    if (!existingKeys.has(key)) {
+      await db.insert(dataSources).values({ tableKey: key, source });
+    }
+  }
+}
+
 async function getCampaignOptimizationRows(): Promise<MarketingRow[]> {
-  const campaigns = await db.select().from(marketingCampaigns).orderBy(sql`start_date ASC`);
-  return campaigns.map(campaign => ({
-    id: campaign.id,
-    channel: campaign.channel,
-    date: campaign.startDate,
-    spend: campaign.spend,
-    revenue: campaign.revenueGenerated,
-    impressions: campaign.impressions,
-    clicks: campaign.clicks,
-    conversions: campaign.conversions,
-    orders: campaign.ordersGenerated,
-  }));
+  const client = await pool.connect();
+  try {
+    const res = await client.query(`
+      SELECT mc.id, mc.channel, mc.start_date, mc.spend, mc.impressions, mc.clicks,
+             mc.conversions, mc.orders_generated,
+             COALESCE(SUM(o.total_amount), 0) AS attributed_revenue
+      FROM marketing_campaigns mc
+      LEFT JOIN orders o ON o.campaign_id = mc.id AND o.status = 'completed'
+      GROUP BY mc.id
+      ORDER BY mc.start_date ASC
+    `);
+    return res.rows.map((row: any) => ({
+      id: Number(row.id),
+      channel: row.channel,
+      date: row.start_date,
+      spend: Number(row.spend),
+      revenue: Number(row.attributed_revenue),
+      impressions: Number(row.impressions),
+      clicks: Number(row.clicks),
+      conversions: Number(row.conversions),
+      orders: Number(row.orders_generated),
+    }));
+  } finally {
+    client.release();
+  }
 }
 
 // ── DESCRIPTIVE ANALYTICS ────────────────────────────────────────────────────
@@ -67,13 +109,17 @@ router.post(
     }).parse(req.body);
 
     const rows = await getCampaignOptimizationRows();
-    const result = await optimizeBudget(
-      body.totalBudget,
-      body.constraints,
-      rows,
-      body.purchaseBudget
-    );
-    res.json(result);
+    try {
+      const result = await optimizeBudget(
+        body.totalBudget,
+        body.constraints,
+        rows,
+        body.purchaseBudget
+      );
+      res.json(result);
+    } catch (e: any) {
+      res.status(400).json({ message: e?.message || 'Optimization failed' });
+    }
   })
 );
 
@@ -160,6 +206,45 @@ router.get(
 
 // ── PROCESS FLOW (R6: Descriptive -> Predictive -> Prescriptive -> Decision) ─
 router.get(
+  '/channel-roi',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const rows = await getChannelRoi();
+    res.json({ minCampaignSpend: Number(process.env.MIN_CAMPAIGN_SPEND) || 1000, channels: rows });
+  })
+);
+
+router.get(
+  '/data-sources',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    await ensureDataSources();
+    const rows = await db.select().from(dataSources);
+    res.json(rows.map(r => ({ tableKey: r.tableKey, source: r.source, updatedAt: r.updatedAt })));
+  })
+);
+
+router.put(
+  '/data-sources/:tableKey',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tableKey = req.params.tableKey;
+    const source = z.string().min(1).parse(req.body?.source);
+    await ensureDataSources();
+    const existing = await db.select().from(dataSources).where(eq(dataSources.tableKey, tableKey));
+    if (existing.length === 0) {
+      await db.insert(dataSources).values({ tableKey, source });
+    } else {
+      await db.update(dataSources).set({ source, updatedAt: new Date() }).where(eq(dataSources.tableKey, tableKey));
+    }
+    res.json({ tableKey, source });
+  })
+);
+
+router.get(
   '/process-flow',
   authenticate,
   authorize('admin'),
@@ -184,7 +269,9 @@ router.get(
 
     // Predictive stage outputs
     const predData = await predictiveService.getAnalytics(3);
-    const nextQuarterForecast = predData.forecast.reduce((sum, f) => sum + f.linearRegression, 0);
+    const nextQuarterForecast = (predData.forecastMonthlyRevenue != null
+      ? predData.forecastMonthlyRevenue * 3
+      : predData.forecast.reduce((sum, f) => sum + (f.movingAverage || 0), 0));
     const highRiskStockouts = predData.stockoutRisks.filter(s => s.riskLevel === 'High').length;
 
     // Prescriptive stage outputs
@@ -262,7 +349,11 @@ router.get(
   asyncHandler(async (_req: Request, res: Response) => {
     const client = await pool.connect();
     try {
-      // Table record counts
+      await ensureDataSources();
+      const sourceRows = await db.select().from(dataSources);
+      const sourceMap = Object.fromEntries(sourceRows.map(r => [r.tableKey, r.source]));
+
+      // Table record counts and date ranges
       const counts = await Promise.all([
         client.query('SELECT COUNT(*) AS c FROM orders'),
         client.query('SELECT COUNT(*) AS c FROM customers'),
@@ -309,16 +400,16 @@ router.get(
       );
 
       res.json({
-        company: 'ReneStore Electronics & Tools',
+        company: 'RENESTORE Electronics & Tools',
         industry: 'E-commerce (Computers, Hardware & Tools)',
         problemBackground:
-          "ReneStore sells computer products but doesn't know which products and channels drive profit, can't reliably forecast demand, and has no data-driven plan for splitting its monthly marketing budget and inventory purchases. Business question: How should ReneStore allocate its marketing budget and stock purchases to maximize profit next month?",
+          "RENESTORE sells computer products but lacks data-driven insight into which products and channels drive profit, cannot reliably forecast demand, and has no systematic plan for allocating its monthly marketing budget and inventory purchases. Business question: How should RENESTORE allocate its marketing budget and stock purchases to maximize profit next month?",
         dataVariables: [
-          { name: 'Products Catalog', table: 'products', records: prodCnt, source: 'Not documented', status: prodCnt >= 50 ? 'PASS' : 'FAIL', dateRange: null },
-          { name: 'Customer Profiles', table: 'customers', records: custCnt, source: 'Not documented', status: custCnt >= 50 ? 'PASS' : 'FAIL', dateRange: customerDateRange },
-          { name: 'Orders', table: 'orders', records: orderCnt, source: 'Not documented', status: orderCnt >= 50 ? 'PASS' : 'FAIL', dateRange: ordersDateRange },
-          { name: 'Marketing Campaigns', table: 'marketing_campaigns', records: campaignCnt, source: 'Not documented', status: campaignCnt >= 50 ? 'PASS' : 'FAIL', dateRange: campaignDateRange },
-          { name: 'Inventory Purchases (Suppliers)', table: 'inventory_purchases', records: invCnt, source: 'Not documented', status: invCnt >= 50 ? 'PASS' : 'FAIL', dateRange: purchaseDateRange },
+          { name: 'Products Catalog', table: 'products', records: prodCnt, source: sourceMap.products, status: prodCnt >= 50 ? 'PASS' : 'FAIL', dateRange: null },
+          { name: 'Customer Profiles', table: 'customers', records: custCnt, source: sourceMap.customers, status: custCnt >= 50 ? 'PASS' : 'FAIL', dateRange: customerDateRange },
+          { name: 'Orders', table: 'orders', records: orderCnt, source: sourceMap.orders, status: orderCnt >= 50 ? 'PASS' : 'FAIL', dateRange: ordersDateRange },
+          { name: 'Marketing Campaigns', table: 'marketing_campaigns', records: campaignCnt, source: sourceMap.marketing_campaigns, status: campaignCnt >= 50 ? 'PASS' : 'FAIL', dateRange: campaignDateRange },
+          { name: 'Inventory Purchases (Suppliers)', table: 'inventory_purchases', records: invCnt, source: sourceMap.inventory_purchases, status: invCnt >= 50 ? 'PASS' : 'FAIL', dateRange: purchaseDateRange },
         ],
         ordersDateRange: {
           start: ordersDateRange.start,
@@ -359,6 +450,50 @@ router.get(
             .map(item => ({ name: item.productName, quantity: item.recommendedOrderQty, totalCost: item.totalCost })),
         },
       });
+    } finally {
+      client.release();
+    }
+  })
+);
+
+// �"?�"? DATA QUALITY �"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?�"?
+router.get(
+  '/data-quality',
+  authenticate,
+  authorize('admin'),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const checks = [
+        { table: 'products', dateCol: null, nullCols: ['description', 'image_url', 'supplier_id'] },
+        { table: 'customers', dateCol: 'signup_date', nullCols: ['email', 'user_id'] },
+        { table: 'orders', dateCol: 'order_date', nullCols: ['campaign_id'] },
+        { table: 'marketing_campaigns', dateCol: 'start_date', nullCols: ['name', 'revenue_generated'] },
+        { table: 'inventory_purchases', dateCol: 'purchase_date', nullCols: [] },
+      ];
+      const result = [];
+      for (const c of checks) {
+        const countRes = await client.query(`SELECT COUNT(*) AS c FROM "${c.table}"`);
+        const rows = Number(countRes.rows[0].c);
+        const nullCounts: Record<string, number> = {};
+        for (const col of c.nullCols) {
+          const nr = await client.query(`SELECT COUNT(*) AS c FROM "${c.table}" WHERE "${col}" IS NULL`);
+          nullCounts[col] = Number(nr.rows[0].c);
+        }
+        let dateRange = null;
+        if (c.dateCol) {
+          const dr = await client.query(`SELECT MIN("${c.dateCol}") AS start, MAX("${c.dateCol}") AS end FROM "${c.table}"`);
+          dateRange = { start: dr.rows[0].start, end: dr.rows[0].end };
+        }
+        let lastUpdated = null;
+        const luCol = c.table === 'orders' ? 'order_date' : c.dateCol;
+        if (luCol) {
+          const lr = await client.query(`SELECT MAX("${luCol}") AS last FROM "${c.table}"`);
+          lastUpdated = lr.rows[0].last;
+        }
+        result.push({ table: c.table, rows, nullCounts, dateRange, lastUpdated });
+      }
+      res.json(result);
     } finally {
       client.release();
     }

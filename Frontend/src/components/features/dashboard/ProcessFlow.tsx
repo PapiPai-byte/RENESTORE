@@ -64,7 +64,7 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
                 Requirement R6: Step-Wise Data Pipeline
               </span>
             </h3>
-            <p className="text-xs text-white/60 mt-1">
+            <p className="text-xs text-white/75 mt-1">
             Shows how database-derived descriptive results feed predictive estimates and prescriptive scenarios.
             </p>
           </div>
@@ -97,41 +97,41 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
             />
           </label>
         </div>
-        <p className="text-[11px] text-white/50 mt-2">Changing either budget recalculates the flow using its configured channel bounds.</p>
+        <p className="text-sm text-white/65 mt-2">Changing either budget recalculates the flow using its configured channel bounds.</p>
         {error && data && <p className="text-xs text-red-200 mt-2">{error}</p>}
       </Card>
 
       {/* 4 Connected Interactive Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 relative">
         {/* Step 1: Descriptive */}
-        <div className="glass rounded-2xl p-5 border border-bright/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/60 lg:after:text-xl">
+        <div className="glass rounded-2xl p-5 border border-bright/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/75 lg:after:text-xl">
           <div className="absolute -top-3 left-4 bg-gradient-to-r from-bright to-teal-500 text-abyss font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
             Step 1: Descriptive
           </div>
           <div className="mt-2 space-y-3">
-            <div className="flex items-center justify-between text-xs text-white/60">
+            <div className="flex items-center justify-between text-xs text-white/75">
               <span>"What Happened?"</span>
               <span className="text-bright font-mono font-bold">Historical Data</span>
             </div>
             <div className="space-y-2 text-xs">
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Peak Revenue Month</span>
+                <span className="text-white/65 block text-xs uppercase">Peak Revenue Month</span>
                 <span className="text-base font-bold text-white">{descriptive.peakMonth || 'Not available'}</span>
-                <span className="text-[11px] text-bright block">{descriptive.peakMonthRevenue == null ? 'No complete month' : formatCurrency(descriptive.peakMonthRevenue)}</span>
+                <span className="text-sm text-bright block">{descriptive.peakMonthRevenue == null ? 'No complete month' : formatCurrency(descriptive.peakMonthRevenue)}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Top Category</span>
+                <span className="text-white/65 block text-xs uppercase">Top Category</span>
                 <span className="text-sm font-bold text-white">{descriptive.topCategory || 'Not available'}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Best Channel by ROI</span>
+                <span className="text-white/65 block text-xs uppercase">Best Channel by Historical ROI</span>
                 <span className="text-sm font-bold text-emerald-300">{descriptive.bestChannel ? `${descriptive.bestChannel} (${descriptive.bestChannelRoi}%)` : 'Not available'}</span>
               </div>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-            <span className="text-[11px] text-white/40">Feeds → Monthly Trends</span>
+            <span className="text-sm text-white/75">Feeds → Monthly Trends</span>
             <button
               onClick={() => handleJump('Descriptive')}
               className="text-xs text-bright hover:underline font-semibold flex items-center gap-1"
@@ -142,43 +142,43 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
         </div>
 
         {/* Step 2: Predictive */}
-        <div className="glass rounded-2xl p-5 border border-sky-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/60 lg:after:text-xl">
+        <div className="glass rounded-2xl p-5 border border-sky-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/75 lg:after:text-xl">
           <div className="absolute -top-3 left-4 bg-gradient-to-r from-sky-400 to-blue-500 text-white font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
             Step 2: Predictive
           </div>
           <div className="mt-2 space-y-3">
-            <div className="flex items-center justify-between text-xs text-white/60">
+            <div className="flex items-center justify-between text-xs text-white/75">
               <span>"What Will Happen?"</span>
               <span className="text-sky-300 font-mono font-bold">Forecast Models</span>
             </div>
             <div className="space-y-2 text-xs">
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Recommended Model</span>
+                <span className="text-white/65 block text-xs uppercase">Recommended Model</span>
                 <span className="text-sm font-bold text-white">{predictive.modelUsed}</span>
-                <span className="text-[11px] text-sky-300 block font-mono">R² = {predictive.rSquared} | RMSE ₱{predictive.rmse?.toLocaleString()}</span>
+                <span className="text-sm text-sky-300 block font-mono">R² = {predictive.rSquared} | RMSE ₱{predictive.rmse?.toLocaleString()}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Next Quarter Forecast</span>
+                <span className="text-white/65 block text-xs uppercase">Next Quarter Forecast</span>
                 <span className="text-base font-bold text-sky-300 tabular-nums">{formatCurrency(predictive.nextQuarterForecast)}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Stockout Risks</span>
+                <span className="text-white/65 block text-xs uppercase">Stockout Risks</span>
                 <span className="text-sm font-bold text-amber-300">{predictive.highRiskStockoutCount} high risk items</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Predicted Channel ROI</span>
+                <span className="text-white/65 block text-xs uppercase">Predicted Channel ROI</span>
                 {(predictive.predictedChannelRoi || []).map((channel: any) => (
-                  <span key={channel.channel} className="flex justify-between gap-2 text-[11px] text-white/80 mt-1">
+                  <span key={channel.channel} className="flex justify-between gap-2 text-sm text-white/80 mt-1">
                     <span>{channel.channel}</span><strong>{channel.predictedRoi}%</strong>
                   </span>
                 ))}
-                {predictive.predictedChannelRoi?.length === 0 && <span className="text-[11px] text-white/60">No campaign history</span>}
+                {predictive.predictedChannelRoi?.length === 0 && <span className="text-sm text-white/75">No campaign history</span>}
               </div>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-            <span className="text-[11px] text-white/40">Feeds → Elasticities & Risk</span>
+            <span className="text-sm text-white/75">Feeds → Elasticities & Risk</span>
             <button
               onClick={() => handleJump('Predictive')}
               className="text-xs text-sky-300 hover:underline font-semibold flex items-center gap-1"
@@ -189,39 +189,39 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
         </div>
 
         {/* Step 3: Prescriptive */}
-        <div className="glass rounded-2xl p-5 border border-amber-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/60 lg:after:text-xl">
+        <div className="glass rounded-2xl p-5 border border-amber-400/30 flex flex-col justify-between hover:shadow-glass transition-all relative group lg:after:content-['→'] lg:after:absolute lg:after:-right-4 lg:after:top-1/2 lg:after:-translate-y-1/2 lg:after:z-10 lg:after:text-white/75 lg:after:text-xl">
           <div className="absolute -top-3 left-4 bg-gradient-to-r from-amber-400 to-yellow-500 text-abyss font-bold text-xs px-2.5 py-0.5 rounded-full shadow">
             Step 3: Prescriptive
           </div>
           <div className="mt-2 space-y-3">
-            <div className="flex items-center justify-between text-xs text-white/60">
+            <div className="flex items-center justify-between text-xs text-white/75">
               <span>"What Should We Do?"</span>
               <span className="text-amber-300 font-mono font-bold">Optimization</span>
             </div>
             <div className="space-y-2 text-xs">
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Optimized Budget Split</span>
+                <span className="text-white/65 block text-xs uppercase">Optimized Budget Split</span>
                 <span className="text-base font-bold text-white tabular-nums">{formatCurrency(prescriptive.recommendedBudget)}</span>
-                <span className="text-[11px] text-emerald-300 block">Top Channel: {prescriptive.topBudgetChannel}</span>
+                <span className="text-sm text-emerald-300 block">Top Channel: {prescriptive.topBudgetChannel}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Expected Marketing Revenue</span>
+                <span className="text-white/65 block text-xs uppercase">Expected Marketing Revenue</span>
                 <span className="text-base font-bold text-emerald-300 tabular-nums">{formatCurrency(prescriptive.expectedMarketingRevenue)}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">EOQ Reorder Orders</span>
+                <span className="text-white/65 block text-xs uppercase">EOQ Reorder Orders</span>
                 <span className="text-sm font-bold text-amber-300">{prescriptive.reorderItemCount} items (₱{prescriptive.reorderCommittedCost?.toLocaleString()})</span>
                 {(prescriptive.reorderItems || []).map((item: any) => (
-                  <span key={item.productName} className="flex justify-between gap-2 text-[11px] text-white/80 mt-1">
+                  <span key={item.productName} className="flex justify-between gap-2 text-sm text-white/80 mt-1">
                     <span>{item.productName} × {item.quantity}</span><strong>{formatCurrency(item.totalCost)}</strong>
                   </span>
                 ))}
-                {prescriptive.reorderItems?.length === 0 && <span className="block text-[11px] text-white/60 mt-1">No products currently meet reorder criteria.</span>}
+                {prescriptive.reorderItems?.length === 0 && <span className="block text-sm text-white/75 mt-1">No products currently meet reorder criteria.</span>}
               </div>
               <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="text-white/50 block text-[10px] uppercase">Recommended Channel Split</span>
+                <span className="text-white/65 block text-xs uppercase">Recommended Channel Split</span>
                 {(prescriptive.allocations || []).map((allocation: any) => (
-                  <span key={allocation.channel} className="flex justify-between gap-2 text-[11px] text-white/80 mt-1">
+                  <span key={allocation.channel} className="flex justify-between gap-2 text-sm text-white/80 mt-1">
                     <span>{allocation.channel} ({allocation.predictedRoi}% ROI)</span><strong>{formatCurrency(allocation.budget)}</strong>
                   </span>
                 ))}
@@ -230,7 +230,7 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
           </div>
 
           <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-            <span className="text-[11px] text-white/40">Feeds → Final Decision</span>
+            <span className="text-sm text-white/75">Feeds → Final Decision</span>
             <button
               onClick={() => handleJump('Prescriptive')}
               className="text-xs text-amber-300 hover:underline font-semibold flex items-center gap-1"
@@ -246,17 +246,17 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
             Step 4: Decision Impact
           </div>
           <div className="mt-2 space-y-3">
-            <div className="flex items-center justify-between text-xs text-white/60">
+            <div className="flex items-center justify-between text-xs text-white/75">
               <span>"Action & Execution"</span>
               <span className="text-emerald-300 font-mono font-bold">Outcome</span>
             </div>
             <div className="space-y-2 text-xs">
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-200/70 block text-[10px] uppercase">Next-Quarter Average Monthly Forecast</span>
+                <span className="text-emerald-200/70 block text-xs uppercase">Next-Quarter Average Monthly Forecast</span>
                 <span className="text-lg font-bold text-emerald-300 tabular-nums">{formatCurrency(decision.projectedMonthlyRevenue)}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-200/70 block text-[10px] uppercase">Estimated Marketing Scenario Uplift</span>
+                <span className="text-emerald-200/70 block text-xs uppercase">Estimated Marketing Scenario Uplift</span>
                 <span className="text-sm font-bold text-white">
                   {decision.expectedMarketingUplift == null
                     ? 'Not available'
@@ -264,18 +264,18 @@ export default function ProcessFlowTab({ onTabChange }: { onTabChange?: (tab: st
                 </span>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-200/70 block text-[10px] uppercase">Products Flagged High Risk</span>
+                <span className="text-emerald-200/70 block text-xs uppercase">Products Flagged High Risk</span>
                 <span className="text-sm font-bold text-white">{decision.highRiskProducts} products</span>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-200/70 block text-[10px] uppercase">Estimated Marketing Return After Spend</span>
+                <span className="text-emerald-200/70 block text-xs uppercase">Estimated Marketing Return After Spend</span>
                 <span className="text-sm font-bold text-white">{formatCurrency(decision.expectedMarketingProfit)}</span>
               </div>
             </div>
           </div>
 
           <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-            <span className="text-[11px] text-emerald-200/90 font-medium">Scenario estimate</span>
+            <span className="text-sm text-emerald-200/90 font-medium">Scenario estimate</span>
             <button
               onClick={() => handleJump('Case Study')}
               className="text-xs text-emerald-300 hover:underline font-semibold flex items-center gap-1"

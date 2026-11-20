@@ -1,9 +1,12 @@
 import { pool } from '../db';
 import descriptiveService from './descriptive-service';
+import { getChannelRoiMap } from './channel-roi';
+import { getForecastMonthlyRevenue, getPeakMonthlyRevenue, ATTRIBUTION_SHARE } from './store-forecast';
 import {
   calculateLinearRegression,
   calculateMovingAverage,
   getConsecutiveFutureMonth,
+  getContiguousBlock,
   calculateEOQ,
   calculateROP,
   type MonthlyDataPoint,
@@ -73,6 +76,9 @@ export interface PredictiveAnalyticsResult {
   channelPredictions: ChannelModel[];
   stockoutRisks: StockoutRiskItem[];
   dataConfidenceNote: string;
+  forecastMonthlyRevenue: number | null;
+  peakMonthlyRevenue: number;
+  naiveBaselineRmse: number;
 }
 
 export class PredictiveService {
@@ -83,7 +89,7 @@ export class PredictiveService {
       const monthlyData = await descriptiveService.getMonthlySales();
 
       // Separate complete months for reliable statistical modeling
-      const completeMonths = monthlyData.filter(m => !m.isPartial);
+      const completeMonths = monthlyData.filter(m => !m.isPartial && (m.orders || 0) >= 5);
       const dataToFit = completeMonths;
 
       const lastCompleteMonth = dataToFit[dataToFit.length - 1]?.month;
@@ -152,15 +158,17 @@ export class PredictiveService {
       // Predict each channel's ROI from its observed campaign-month returns.
       const mktRes = await client.query(`
         SELECT
-          channel,
-          to_char(date_trunc('month', start_date), 'YYYY-MM') AS month,
-          COALESCE(SUM(spend), 0) AS total_spend,
-          COALESCE(SUM(revenue_generated), 0) AS total_revenue
-        FROM marketing_campaigns
-        GROUP BY channel, date_trunc('month', start_date)
-        ORDER BY channel, date_trunc('month', start_date)
+          mc.channel,
+          to_char(date_trunc('month', mc.start_date), 'YYYY-MM') AS month,
+          COALESCE(SUM(mc.spend), 0) AS total_spend,
+          COALESCE(SUM(o.total_amount), 0) AS total_revenue
+        FROM marketing_campaigns mc
+        LEFT JOIN orders o ON o.campaign_id = mc.id AND o.status = 'completed'
+        GROUP BY mc.channel, date_trunc('month', mc.start_date)
+        ORDER BY mc.channel, date_trunc('month', mc.start_date)
       `);
 
+      const channelRoiMap = await getChannelRoiMap();
       const campaignsByChannel = new Map<string, { spend: number; revenue: number; roi: number }[]>();
       for (const row of mktRes.rows) {
         const rows = campaignsByChannel.get(row.channel) || [];
@@ -179,10 +187,11 @@ export class PredictiveService {
         const secondHalf = rows.slice(midpoint).map(row => row.roi);
         const firstAverage = firstHalf.reduce((total, roi) => total + roi, 0) / Math.max(1, firstHalf.length);
         const secondAverage = secondHalf.reduce((total, roi) => total + roi, 0) / Math.max(1, secondHalf.length);
+        const shared = channelRoiMap[channel];
 
         return {
           channel,
-          historicalRoi: Number((spend > 0 ? ((revenue - spend) / spend) * 100 : 0).toFixed(1)),
+          historicalRoi: shared ? shared.roi : Number((spend > 0 ? ((revenue - spend) / spend) * 100 : 0).toFixed(1)),
           predictedRoi: Number(predictedRoi.toFixed(1)),
           historicalSpend: Math.round(spend),
           historicalRevenue: Math.round(revenue),
@@ -224,25 +233,38 @@ export class PredictiveService {
       const totalMonths = dataToFit.length;
       const stockoutRisks: StockoutRiskItem[] = stockRes.rows.map((r: any) => {
         const currentStock = Number(r.stock);
-        const reorderLevel = Number(r.reorder_level);
+        const dbReorderLevel = Number(r.reorder_level);
         const totalUnits = Number(r.total_units_sold);
         const leadTimeDays = Math.round(Number(r.avg_lead_time)) || 0;
 
-        const monthlyDemand = totalMonths > 0 ? Math.round(totalUnits / totalMonths) : 0;
+        const monthlyDemand = totalMonths > 0 ? Math.round((totalUnits / totalMonths) * 10) / 10 : 0;
         const dailyDemand = monthlyDemand / 30;
         const daysOfInventory = dailyDemand > 0 ? Math.round(currentStock / dailyDemand) : null;
 
+        const reorderPoint = calculateROP(monthlyDemand, leadTimeDays);
+        const reorderLevel = reorderPoint > 0 ? reorderPoint : dbReorderLevel;
+
         let riskLevel: 'High' | 'Medium' | 'Low' = 'Low';
-        if (currentStock <= reorderLevel || (daysOfInventory !== null && leadTimeDays > 0 && daysOfInventory <= leadTimeDays)) {
+        if (monthlyDemand <= 0) {
+          riskLevel = currentStock <= 0 ? 'High' : 'Low';
+        } else if (currentStock <= 0) {
           riskLevel = 'High';
-        } else if (daysOfInventory !== null && leadTimeDays > 0 && daysOfInventory <= leadTimeDays * 2.5) {
+        } else if (daysOfInventory !== null && leadTimeDays > 0 && daysOfInventory <= leadTimeDays) {
+          riskLevel = 'High';
+        } else if (daysOfInventory !== null && leadTimeDays > 0 && daysOfInventory <= leadTimeDays * 2) {
           riskLevel = 'Medium';
+        } else if (currentStock <= reorderLevel) {
+          riskLevel = 'High';
         }
 
-        const eoq = calculateEOQ(monthlyDemand * 12, Number(r.cost));
-        const suggestedReorderQty = totalMonths > 0 && riskLevel === 'High'
-          ? Math.max(eoq, reorderLevel * 2)
-          : eoq;
+        const eoq = calculateEOQ(Math.max(1, monthlyDemand) * 12, Number(r.cost));
+        const suggestedReorderQty = monthlyDemand <= 0
+          ? 0
+          : riskLevel === 'High'
+            ? Math.max(1, Math.min(eoq, Math.ceil(monthlyDemand * 3)))
+            : riskLevel === 'Medium'
+              ? Math.max(1, Math.min(Math.ceil(eoq * 0.5), Math.ceil(monthlyDemand * 2)))
+              : 0;
 
         return {
           productId: r.id,
@@ -255,13 +277,18 @@ export class PredictiveService {
           daysOfInventory,
           riskLevel,
           suggestedReorderQty,
-          supplier: r.preferred_supplier || 'Not recorded',
+          supplier: r.preferred_supplier || 'Supplier not set',
         };
       });
 
       const dataConfidenceNote = dataToFit.length < 3
         ? `Limited data: only ${dataToFit.length} complete historical month(s) are available. Treat forecasts as indicative, not a guarantee.`
         : `Forecasts use ${dataToFit.length} complete historical months (${startMonth} to ${lastCompleteMonth}); model fit does not guarantee future results.`;
+
+      const forecastMonthlyRevenue = await getForecastMonthlyRevenue();
+      const peakMonthlyRevenue = await getPeakMonthlyRevenue();
+      const meanY = revenueSeries.reduce((a,b)=>a+b,0)/Math.max(1,revenueSeries.length);
+      const naiveBaselineRmse = Math.sqrt(revenueSeries.reduce((s,y)=>s+Math.pow(y-meanY,2),0)/Math.max(1,revenueSeries.length));
 
       return {
         sharedDateRange: {
@@ -291,6 +318,9 @@ export class PredictiveService {
         channelPredictions,
         stockoutRisks,
         dataConfidenceNote,
+        forecastMonthlyRevenue,
+        peakMonthlyRevenue,
+        naiveBaselineRmse: Number(naiveBaselineRmse.toFixed(2)),
       };
     } finally {
       client.release();

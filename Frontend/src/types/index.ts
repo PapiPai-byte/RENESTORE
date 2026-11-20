@@ -85,6 +85,7 @@ export interface AnalyticsDescriptive {
     profitMargin: number;
     totalCustomers: number;
     stockoutCount: number;
+    outOfStockCount?: number;
   };
   salesByMonth: { month: string; revenue: number; profit: number; orders: number; isPartial?: boolean }[];
   salesByCategory: { category: string; revenue: number; unitsSold: number }[];
@@ -115,6 +116,9 @@ export interface AnalyticsDescriptive {
 }
 
 export interface AnalyticsPredictive {
+  forecastMonthlyRevenue?: number | null;
+  peakMonthlyRevenue?: number;
+  naiveBaselineRmse?: number;
   sharedDateRange: {
     startMonth: string;
     endMonth: string;
@@ -187,6 +191,7 @@ export interface BudgetAllocation {
   boundHit: 'MIN' | 'MAX' | null;
   historicalSpend: number;
   changePct: number;
+  model?: 'power-law' | 'constant-roi';
 }
 
 export interface Baseline {
@@ -232,8 +237,14 @@ export interface AnalyticsPrescriptive {
   totalBudget: number;
   totalAllocated: number;
   totalExpectedRevenue: number;
+  totalExpectedRevenueUncapped?: number;
+  revenueCap?: number;
+  capped?: boolean;
   overallROI: number;
   overallROAS: number;
+  model?: string;
+  historicalAverageMonthlySpend?: number;
+  historicalMixAllocation?: Record<string, number>;
   allocations: BudgetAllocation[];
   baselines: Baseline[];
   actionList: ActionRecommendation[];

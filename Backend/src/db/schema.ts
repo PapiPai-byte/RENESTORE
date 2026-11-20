@@ -149,6 +149,13 @@ export const chatLogs = pgTable('chat_logs', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
+export const dataSources = pgTable('data_sources', {
+  id: serial('id').primaryKey(),
+  tableKey: text('table_key').notNull().unique(),
+  source: text('source').notNull(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
   products: many(products),
 }));
@@ -191,3 +198,4 @@ export type InsertCampaign = InferInsertModel<typeof marketingCampaigns>;
 export type InsertInventoryPurchase = InferInsertModel<typeof inventoryPurchases>;
 export type InsertFaq = InferInsertModel<typeof faqs>;
 export type InsertChatLog = InferInsertModel<typeof chatLogs>;
+export type InsertDataSource = InferInsertModel<typeof dataSources>;

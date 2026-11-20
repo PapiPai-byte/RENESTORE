@@ -1,5 +1,6 @@
 import { pool } from '../db';
 import { calculateDescriptiveStats, type MonthlyDataPoint, type DescriptiveStats } from './analytics-shared';
+import { getChannelRoiMap } from './channel-roi';
 
 export interface DescriptiveAnalyticsResult {
   kpis: {
@@ -10,6 +11,7 @@ export interface DescriptiveAnalyticsResult {
     profitMargin: number;
     totalCustomers: number;
     stockoutCount: number;
+    outOfStockCount: number;
   };
   salesByMonth: MonthlyDataPoint[];
   salesByCategory: { category: string; revenue: number; unitsSold: number }[];
@@ -90,13 +92,15 @@ export class DescriptiveService {
       `;
       const res = await client.query(query);
 
-      return res.rows.map((row: any) => ({
-        month: row.month,
-        revenue: Math.round(Number(row.revenue)),
-        profit: Math.round(Number(row.profit)),
-        orders: Number(row.orders),
-        isPartial: row.is_partial,
-      }));
+      return res.rows
+        .map((row: any) => ({
+          month: row.month,
+          revenue: Math.round(Number(row.revenue)),
+          profit: Math.round(Number(row.profit)),
+          orders: Number(row.orders),
+          isPartial: row.is_partial,
+        }))
+        .filter((row) => !row.isPartial && row.orders >= 5);
     } finally {
       client.release();
     }
@@ -135,13 +139,15 @@ export class DescriptiveService {
       const custRes = await client.query('SELECT COUNT(*) AS total FROM customers');
       const totalCustomers = Number(custRes.rows[0].total) || 0;
 
-      // 4. Stockout count (products with stock <= reorder_level)
+      // 4. Stockout / low stock counts
       const stockoutRes = await client.query(`
         SELECT COUNT(*) AS count
         FROM products
         WHERE stock <= reorder_level
       `);
       const stockoutCount = Number(stockoutRes.rows[0].count) || 0;
+      const outOfStockRes = await client.query(`SELECT COUNT(*) AS count FROM products WHERE stock <= 0`);
+      const outOfStockCount = Number(outOfStockRes.rows[0].count) || 0;
 
       // 5. Monthly Sales & Profit series (Shared with Predictive)
       const salesByMonth = await this.getMonthlySales();
@@ -295,16 +301,18 @@ export class DescriptiveService {
       }));
 
       // Campaign metrics use the campaign table directly.
+      const channelRoiMap = await getChannelRoiMap();
       const mktRes = await client.query(`
         SELECT
-          channel,
-          COALESCE(SUM(spend), 0) AS total_spend,
-          COALESCE(SUM(impressions), 0) AS total_impressions,
-          COALESCE(SUM(clicks), 0) AS total_clicks,
-          COALESCE(SUM(orders_generated), 0) AS total_orders,
-          COALESCE(SUM(revenue_generated), 0) AS total_revenue
-        FROM marketing_campaigns
-        GROUP BY channel
+          mc.channel,
+          COALESCE(SUM(mc.spend), 0) AS total_spend,
+          COALESCE(SUM(mc.impressions), 0) AS total_impressions,
+          COALESCE(SUM(mc.clicks), 0) AS total_clicks,
+          COALESCE(COUNT(o.id), 0) AS total_orders,
+          COALESCE(SUM(o.total_amount), 0) AS total_revenue
+        FROM marketing_campaigns mc
+        LEFT JOIN orders o ON o.campaign_id = mc.id AND o.status = 'completed'
+        GROUP BY mc.channel
         ORDER BY total_revenue DESC
       `);
 
@@ -318,7 +326,7 @@ export class DescriptiveService {
         const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0;
         const conversionRate = clicks > 0 ? (orders / clicks) * 100 : 0;
         const costPerOrder = orders > 0 ? spend / orders : 0;
-        const roi = spend > 0 ? ((revenue - spend) / spend) * 100 : 0;
+        const roi = channelRoiMap[r.channel]?.roi ?? (spend > 0 ? ((revenue - spend) / spend) * 100 : 0);
 
         return {
           channel: r.channel,
@@ -355,6 +363,7 @@ export class DescriptiveService {
           profitMargin: Number(profitMargin.toFixed(1)),
           totalCustomers,
           stockoutCount,
+          outOfStockCount,
         },
         salesByMonth,
         salesByCategory,

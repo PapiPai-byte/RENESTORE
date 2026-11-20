@@ -194,6 +194,28 @@ export function calculateMovingAverage(
  * Generates consecutive future month strings
  * Example: given '2025-12' and offset 1 => '2026-01', offset 2 => '2026-02'
  */
+/**
+ * Returns the longest contiguous run of monthly data points (no calendar gaps).
+ * Useful for forecasting when the full series contains isolated trailing months.
+ */
+export function getContiguousBlock(months: { month: string }[]): { month: string }[] {
+  if (months.length === 0) return [];
+  let best: { month: string }[] = [months[0]];
+  let current: { month: string }[] = [months[0]];
+  for (let i = 1; i < months.length; i++) {
+    const prev = new Date(months[i - 1].month + '-01T00:00:00Z');
+    const curr = new Date(months[i].month + '-01T00:00:00Z');
+    const diffMonths = (curr.getUTCFullYear() - prev.getUTCFullYear()) * 12 + (curr.getUTCMonth() - prev.getUTCMonth());
+    if (diffMonths === 1) {
+      current.push(months[i]);
+      if (current.length > best.length) best = [...current];
+    } else {
+      current = [months[i]];
+    }
+  }
+  return best;
+}
+
 export function getConsecutiveFutureMonth(baseYearMonth: string, offset: number): string {
   const parts = baseYearMonth.split('-');
   const year = parseInt(parts[0], 10);

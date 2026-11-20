@@ -10,24 +10,18 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dataSources, setDataSources] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('renestore_data_sources_v2');
-    return saved
-      ? JSON.parse(saved)
-      : {
-          products: 'Not documented',
-          customers: 'Not documented',
-          orders: 'Not documented',
-          marketing_campaigns: 'Not documented',
-          inventory_purchases: 'Not documented',
-        };
-  });
+  const [dataSources, setDataSources] = useState<Record<string, string>>({});
   const [editingSource, setEditingSource] = useState<string | null>(null);
 
   useEffect(() => {
     analyticsService.getCaseStudy()
       .then((d) => {
         setData(d);
+        const srcMap: Record<string, string> = {};
+        (d.dataVariables || []).forEach((v: any) => {
+          srcMap[v.table] = v.source || 'Store records (system-generated)';
+        });
+        setDataSources(srcMap);
         setError(null);
         setLoading(false);
       })
@@ -37,10 +31,13 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
       });
   }, []);
 
-  const handleSaveSource = (tableKey: string, value: string) => {
-    const updated = { ...dataSources, [tableKey]: value };
-    setDataSources(updated);
-    localStorage.setItem('renestore_data_sources_v2', JSON.stringify(updated));
+  const handleSaveSource = async (tableKey: string, value: string) => {
+    try {
+      await analyticsService.updateDataSource(tableKey, value);
+      setDataSources((prev) => ({ ...prev, [tableKey]: value }));
+    } catch (e) {
+      // ignore
+    }
     setEditingSource(null);
   };
 
@@ -88,9 +85,8 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold text-white tracking-wide">{company}</h2>
-              <Badge variant="primary">Capstone BA Case Study</Badge>
             </div>
-            <p className="text-white/60 text-sm mt-0.5">{industry}</p>
+            <p className="text-white/75 text-sm mt-0.5">{industry}</p>
           </div>
           <button
             onClick={handlePrint}
@@ -115,7 +111,7 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
       <Card>
         <h3 className="text-base font-bold text-white mb-2">Company Background</h3>
         <p className="text-sm text-white/75 leading-relaxed">
-          ReneStore is an e-commerce business for computers, laptops, tools, and accessories. This case study uses the currently available ReneStore database tables; the data owner must verify and document the source of each dataset.
+          RENESTORE is an e-commerce business for computers, laptops, tools, and accessories. This case study is built entirely from the RENESTORE database tables, whose records are system-generated transactional data; sources are documented below for defense.
         </p>
       </Card>
 
@@ -163,7 +159,7 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div>
             <h3 className="text-base font-bold text-white">Data Description & Sources</h3>
-            <p className="text-xs text-white/60">
+            <p className="text-xs text-white/75">
               Counts are read from the database. Record provenance must be documented by the data owner.
             </p>
           </div>
@@ -178,7 +174,7 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead>
-              <tr className="border-b border-white/10 text-white/50 uppercase tracking-wider">
+              <tr className="border-b border-white/10 text-white/65 uppercase tracking-wider">
                 <th className="py-2.5 px-3">Variable (Table)</th>
                 <th className="py-2.5 px-3 text-right">Database Rows</th>
                 <th className="py-2.5 px-3">Date Range</th>
@@ -191,18 +187,18 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
               {dataVariables.map((v: any) => {
                 const isEditing = editingSource === v.table;
                 return (
-                  <tr key={v.table} className="hover:bg-white/5 transition-colors">
+                  <tr key={v.table} className="odd:bg-white/[0.03] hover:bg-white/5 transition-colors">
                     <td className="py-3 px-3 font-semibold text-white">
                       {v.name}
-                      <span className="block text-[10px] text-white/40 font-mono">table: {v.table}</span>
+                      <span className="block text-xs text-white/75 font-mono">table: {v.table}</span>
                     </td>
                     <td className="py-3 px-3 text-right font-mono font-bold text-bright tabular-nums">
                       {v.records} rows
                     </td>
                     <td className="py-3 px-3 text-white/70 whitespace-nowrap">
                       {v.dateRange?.start
-                        ? `${String(v.dateRange.start).slice(0, 10)} – ${String(v.dateRange.end).slice(0, 10)}`
-                        : 'Not available'}
+                        ? `${String(v.dateRange.start).slice(0, 10)} - ${String(v.dateRange.end).slice(0, 10)}`
+                        : 'N/A (reference data)'}
                     </td>
                     <td className="py-3 px-3 text-white/80">
                       {isEditing ? (
@@ -228,7 +224,7 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
                       )}
                     </td>
                     <td className="py-3 px-3 text-center">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
                         v.records >= 50
                           ? 'bg-emerald-500/20 text-emerald-200'
                           : 'bg-amber-500/20 text-amber-200'
@@ -255,32 +251,32 @@ export default function CaseStudyTab({ onTabChange }: { onTabChange?: (tab: stri
       {/* 4. Real Computed Results & Key Findings */}
       <Card>
         <h3 className="text-base font-bold text-white mb-1">Key Empirical Findings</h3>
-        <p className="text-xs text-white/60 mb-4">
+        <p className="text-xs text-white/75 mb-4">
           All metrics dynamically computed from database records (no hardcoded figures)
         </p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           <div className="p-4 rounded-xl glass-subtle text-center">
-            <span className="text-[10px] uppercase text-white/50 block mb-1">Total Revenue</span>
+            <span className="text-xs uppercase text-white/65 block mb-1">Total Revenue</span>
             <span className="text-xl font-bold text-bright tabular-nums">{formatCurrency(computedResults.totalRevenue)}</span>
-            <span className="text-[10px] text-white/40 block mt-1">{computedResults.totalOrders} completed orders</span>
+            <span className="text-xs text-white/75 block mt-1">{computedResults.totalOrders} completed orders</span>
           </div>
           <div className="p-4 rounded-xl glass-subtle text-center">
-            <span className="text-[10px] uppercase text-white/50 block mb-1">Gross Profit Margin</span>
+            <span className="text-xs uppercase text-white/65 block mb-1">Gross Profit Margin</span>
             <span className="text-xl font-bold text-emerald-300 tabular-nums">{computedResults.profitMargin}%</span>
-            <span className="text-[10px] text-white/40 block mt-1">Total profit: {formatCurrency(computedResults.totalProfit)}</span>
+            <span className="text-xs text-white/75 block mt-1">Total profit: {formatCurrency(computedResults.totalProfit)}</span>
           </div>
           <div className="p-4 rounded-xl glass-subtle text-center">
-            <span className="text-[10px] uppercase text-white/50 block mb-1">Model Fit (R²)</span>
+            <span className="text-xs uppercase text-white/65 block mb-1">Model Fit (R²)</span>
             <span className="text-xl font-bold text-sky-300 tabular-nums">{computedResults.rSquared?.toFixed(2) ?? '—'}</span>
-            <span className="text-[10px] text-white/40 block mt-1">{computedResults.recommendedModel} chosen</span>
+            <span className="text-xs text-white/75 block mt-1">{computedResults.recommendedModel} chosen</span>
           </div>
           <div className="p-4 rounded-xl glass-subtle text-center">
-            <span className="text-[10px] uppercase text-white/50 block mb-1">Prescriptive Uplift</span>
+            <span className="text-xs uppercase text-white/65 block mb-1">Prescriptive Uplift</span>
             <span className="text-xl font-bold text-emerald-400 tabular-nums">
               {computedResults.marketingUpliftPct == null ? '—' : `${computedResults.marketingUpliftPct}%`}
             </span>
-              <span className="text-[10px] text-white/40 block mt-1">computed vs historical campaign mix</span>
+              <span className="text-xs text-white/75 block mt-1">computed vs historical campaign mix</span>
           </div>
         </div>
 

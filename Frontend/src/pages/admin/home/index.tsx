@@ -32,6 +32,10 @@ export default function AdminHome() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [dataThrough, setDataThrough] = useState<string>('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [dataQuality, setDataQuality] = useState<any>(null);
+  const [showDataQuality, setShowDataQuality] = useState(false);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -43,11 +47,24 @@ export default function AdminHome() {
       ]);
       setKpis(descriptive.kpis);
       setDataOverview(overview);
+      const lastMonth = descriptive.salesByMonth?.filter((m: any) => m.orders >= 5)?.slice(-1)?.[0]?.month;
+      if (lastMonth) setDataThrough(lastMonth);
       setLastUpdated(new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }));
+      setRefreshKey((k) => k + 1);
     } catch (e: any) {
       setError(e.message ?? 'Failed to load analytics data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchQuality = async () => {
+    try {
+      const q = await analyticsService.getDataQuality();
+      setDataQuality(q);
+      setShowDataQuality(true);
+    } catch (e) {
+      // ignore
     }
   };
 
@@ -90,6 +107,21 @@ export default function AdminHome() {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={fetchDashboardData}
+            className="glass px-3.5 py-2 rounded-xl text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2 border border-white/15"
+          >
+            <svg className="w-4 h-4 text-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh
+          </button>
+          <button
+            onClick={fetchQuality}
+            className="glass px-3.5 py-2 rounded-xl text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2 border border-white/15"
+          >
+            Data Quality
+          </button>
+          <button
             onClick={() => setShowDataOverview(!showDataOverview)}
             className="glass px-3.5 py-2 rounded-xl text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-2 border border-white/15"
           >
@@ -100,6 +132,11 @@ export default function AdminHome() {
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           </button>
 
+          {dataThrough && (
+            <span className="glass-subtle text-[11px] text-white/65 px-3 py-2 rounded-xl flex-shrink-0">
+              Data through: {dataThrough}
+            </span>
+          )}
           {lastUpdated && (
             <span className="glass-subtle text-[11px] text-white/65 px-3 py-2 rounded-xl flex-shrink-0">
               Updated: {lastUpdated}
@@ -171,6 +208,26 @@ export default function AdminHome() {
         </div>
       )}
 
+      {showDataQuality && dataQuality && (
+        <div className="glass rounded-2xl p-6 mb-8 border border-sky-400/30 shadow-glass animate-slide-up">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white">Data Quality Panel</h3>
+            <button onClick={() => setShowDataQuality(false)} className="text-white/40 hover:text-white text-sm px-2 py-1">Close</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {dataQuality.map((q: any) => (
+              <div key={q.table} className="p-3.5 rounded-xl border border-white/10 glass-subtle">
+                <p className="text-xs font-semibold text-white/80 mb-1">{q.table}</p>
+                <p className="text-sm text-white">Rows: {q.rows}</p>
+                <p className="text-[11px] text-white/60">Nulls: {Object.entries(q.nullCounts || {}).map(([k,v]) => `${k}:${v}`).join(', ') || 'none'}</p>
+                <p className="text-[11px] text-white/60">Range: {q.dateRange?.start?.slice(0,10) || 'N/A'} to {q.dateRange?.end?.slice(0,10) || 'N/A'}</p>
+                <p className="text-[11px] text-white/60">Last updated: {q.lastUpdated?.slice(0,10) || 'N/A'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <>
           {/* Skeleton KPI cards */}
@@ -204,14 +261,14 @@ export default function AdminHome() {
             <KpiCard title="Total Orders" value={kpis?.totalOrders ?? 0} delay={80} />
             <KpiCard title="Avg Order Value" value={kpis?.avgOrderValue ?? 0} delay={120} />
             <KpiCard title="Profit Margin" value={`${kpis?.profitMargin ?? 0}%`} delay={160} />
-            <KpiCard title="Stockout Items" value={kpis?.stockoutCount ?? 0} delay={200} />
+            <KpiCard title="Out of stock" value={kpis?.outOfStockCount ?? 0} delay={200} />
           </div>
 
           {/* Navigation Tabs */}
           <Tabs tabs={tabs} activeTab={activeTab} onSelect={setActiveTab} />
 
           {/* Active Tab Content */}
-          <div key={activeTab} className="mt-6 animate-slide-up">
+          <div key={`${activeTab}-${refreshKey}`} className="mt-6 animate-slide-up">
             {tabContent[activeTab]}
           </div>
         </>
