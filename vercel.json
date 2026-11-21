@@ -15,6 +15,7 @@
       ]
     }
   },
+  "buildCommand": "echo 'no root build step'",
   "rewrites": [
     {
       "source": "/api/(.*)",
