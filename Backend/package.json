@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "build": "tsc --noEmit",
     "start": "tsx src/server.ts",
     "lint": "eslint . --ext .ts",
     "db:generate": "drizzle-kit generate",
